@@ -5,29 +5,42 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
 )
+
+type AuthenticatorInputs struct {
+	AuthURL    string `yaml:"auth_url"`
+	AuthMethod string `yaml:"auth_method"`
+	CookieName string `yaml:"cookie_name"`
+}
+
+type Authenticator struct {
+	AuthenticatorInputs
+	client *http.Client
+	tokens TokenExchanger
+}
+
+func NewAuthenticator(inputs AuthenticatorInputs,
+	tokenClient TokenExchanger) *Authenticator {
+
+	return &Authenticator{
+		AuthenticatorInputs: inputs,
+		client:              &http.Client{},
+		tokens:              tokenClient,
+	}
+}
 
 type TokenExchanger interface {
 	exchangeTokenForBearer(token string) (string, error)
 }
 
-type Authenticator struct {
-	AuthServer string
-	AuthMethod string
-	CookieName string
-	client     *http.Client
-	tokens     TokenExchanger
-}
-
-func NewAuthenticator(authServer, authMethod, cookieName string) *Authenticator {
-	return &Authenticator{
-		AuthServer: authServer,
-		AuthMethod: authMethod,
-		CookieName: cookieName,
-		client:     &http.Client{},
-		tokens:     &tokenClient{},
-	}
+type Claims struct {
+	jwt.StandardClaims
+	Username    string `json:"preferred_username"`
+	RealmAccess struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
 }
 
 // IsAuthenticated checks if the request is authenticated. Each authentication
@@ -38,43 +51,63 @@ func NewAuthenticator(authServer, authMethod, cookieName string) *Authenticator 
 //  2. If the Authorization header contains a Bearer token, attach to the
 //     authorization request.
 //  3. If a session token cookie is present, attach to the request.
-func (a Authenticator) IsAuthenticated(r *http.Request) bool {
+func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	logger := zerolog.Ctx(r.Context())
+
+	// Initialise an empty claims struct, this will be returned even in event
+	// of an error
+	claims := &Claims{}
 
 	// Create the authentication request
 	authRequest, err := a.createAuthRequest(r)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to create authentication request")
-		return false
+		return false, claims
 	}
 
 	// Send the authentication request
 	resp, err := a.client.Do(authRequest)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to send authentication request")
-		return false
+		return false, claims
 	}
 
-	// Check the response status code is within the 2xx range
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		logger.Info().
-			Int("status_code", resp.StatusCode).
-			Msg("Cookie authentication request succeeded")
-		return true
-	} else {
+	// Check the response status code is outwith the 2xx range
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Info().
 			Int("status_code", resp.StatusCode).
 			Msg("Cookie authentication request failed")
-		return false
+		return false, claims
 	}
+	logger.Info().
+		Int("status_code", resp.StatusCode).
+		Msg("Cookie authentication request succeeded")
+
+	// Extract the JWT claims from the response
+	claimsHeaderName := "X-Auth-Request-Access-Token"
+	authHeader := resp.Header.Get(claimsHeaderName)
+	if authHeader != "" {
+		if _, err := jwt.ParseWithClaims(
+			strings.TrimPrefix(authHeader, "Bearer "), claims, nil); err != nil {
+			// Ignore validation errors (no need to check signing of key)
+			if _, ok := err.(*jwt.ValidationError); !ok {
+				logger.Warn().Err(err).Msg("Failed to decode bearer token")
+			}
+		}
+	} else {
+		logger.Warn().Msgf("'%s' header missing from auth response",
+			claimsHeaderName)
+	}
+
+	return true, claims
 }
 
-func (a Authenticator) createAuthRequest(r *http.Request) (*http.Request, error) {
+func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error) {
 	logger := zerolog.Ctx(r.Context())
 
 	// Create a subrequest to authenticate via upstream service
 	authRequest, err := http.NewRequestWithContext(
-		r.Context(), "GET", a.AuthServer, nil)
+		r.Context(), "GET", a.AuthURL, nil)
 	if err != nil {
 		return nil, err
 	}

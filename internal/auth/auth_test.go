@@ -1,9 +1,13 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt"
 )
 
 type mockTokens struct {
@@ -21,7 +25,9 @@ func (m *mockTokens) exchangeTokenForBearer(token string) (string, error) {
 func TestAuthenticator_ValidAPIToken(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		CookieName: "test-cookie",
+		AuthenticatorInputs: AuthenticatorInputs{
+			CookieName: "test-cookie",
+		},
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -53,7 +59,9 @@ func TestAuthenticator_ValidAPIToken(t *testing.T) {
 func TestAuthenticator_ValidBearerToken(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		CookieName: "test-cookie",
+		AuthenticatorInputs: AuthenticatorInputs{
+			CookieName: "test-cookie",
+		},
 	}
 
 	// Create a new request with an API token
@@ -82,7 +90,9 @@ func TestAuthenticator_ValidBearerToken(t *testing.T) {
 func TestAuthenticator_ValidSession(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		CookieName: "test-cookie",
+		AuthenticatorInputs: AuthenticatorInputs{
+			CookieName: "test-cookie",
+		},
 	}
 
 	// Create a new request with an API token
@@ -118,7 +128,9 @@ func TestAuthenticator_ValidSession(t *testing.T) {
 func TestAuthenticator_NoAuth(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		CookieName: "test-cookie",
+		AuthenticatorInputs: AuthenticatorInputs{
+			CookieName: "test-cookie",
+		},
 	}
 
 	// Create a new request with an API token
@@ -142,10 +154,12 @@ func TestAuthenticator_NoAuth(t *testing.T) {
 	}
 }
 
-func TestAuthenticator_ExchangeError(t *testing.T) {
+func TestAuthenticator_TokenError(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		CookieName: "test-cookie",
+		AuthenticatorInputs: AuthenticatorInputs{
+			CookieName: "test-cookie",
+		},
 		tokens: &mockTokens{
 			err: ErrInvalidToken,
 		},
@@ -177,16 +191,20 @@ func TestAuthenticator_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
+			if err := setSuccessResponse(w); err != nil {
+				t.Fatalf("Error creating response: %v", err)
+			}
 		}))
 	defer server.Close()
 
 	// Create a new authenticator
 	a := Authenticator{
-		AuthServer: server.URL,
-		AuthMethod: http.MethodGet,
-		CookieName: "test-cookie",
-		client:     server.Client(),
+		AuthenticatorInputs: AuthenticatorInputs{
+			AuthURL:    server.URL,
+			AuthMethod: http.MethodGet,
+			CookieName: "test-cookie",
+		},
+		client: server.Client(),
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -198,10 +216,22 @@ func TestAuthenticator_Authenticated(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	isAuthenticated := a.IsAuthenticated(req)
+	isAuthenticated, claims := a.IsAuthenticated(req)
 
 	if !isAuthenticated {
 		t.Fatalf("Expected request to be authenticated")
+	}
+
+	if claims.Username != "test-user" {
+		t.Fatalf("Incorrect username: %s", claims.Username)
+	}
+
+	if len(claims.RealmAccess.Roles) != 1 {
+		t.Fatalf("Incorrect number of roles: %d", len(claims.RealmAccess.Roles))
+	}
+
+	if claims.RealmAccess.Roles[0] != "test-role" {
+		t.Fatalf("Incorrect role: %s", claims.RealmAccess.Roles[0])
 	}
 }
 
@@ -215,10 +245,12 @@ func TestAuthenticator_Unauthenticated(t *testing.T) {
 
 	// Create a new authenticator
 	a := Authenticator{
-		AuthServer: server.URL,
-		AuthMethod: http.MethodGet,
-		CookieName: "test-cookie",
-		client:     server.Client(),
+		AuthenticatorInputs: AuthenticatorInputs{
+			AuthURL:    server.URL,
+			AuthMethod: http.MethodGet,
+			CookieName: "test-cookie",
+		},
+		client: server.Client(),
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -230,9 +262,41 @@ func TestAuthenticator_Unauthenticated(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	isAuthenticated := a.IsAuthenticated(req)
+	isAuthenticated, claims := a.IsAuthenticated(req)
 
 	if isAuthenticated {
 		t.Fatalf("Expected request to be unauthenticated")
 	}
+
+	if claims.Username != "" {
+		t.Fatalf("Incorrect username: %s", claims.Username)
+	}
+
+	if len(claims.RealmAccess.Roles) != 0 {
+		t.Fatalf("Incorrect number of roles: %d", len(claims.RealmAccess.Roles))
+	}
+}
+
+func setSuccessResponse(w http.ResponseWriter) error {
+	claims := &Claims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		},
+		Username: "test-user",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test-role"},
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secret := []byte("your-secret-key")
+	tokenString, err := token.SignedString(secret)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("X-Auth-Request-Access-Token",
+		fmt.Sprintf("Bearer %s", tokenString))
+	w.WriteHeader(http.StatusOK)
+	return nil
 }
