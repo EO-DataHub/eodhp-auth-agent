@@ -3,6 +3,8 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/golang-jwt/jwt"
@@ -10,9 +12,11 @@ import (
 )
 
 type AuthenticatorInputs struct {
-	AuthURL    string `yaml:"auth_url"`
-	AuthMethod string `yaml:"auth_method"`
-	CookieName string `yaml:"cookie_name"`
+	Name           string   `yaml:"name"`
+	AuthURL        string   `yaml:"auth_url"`
+	AuthMethod     string   `yaml:"auth_method"`
+	CookieName     string   `yaml:"cookie_name"`
+	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
 type Authenticator struct {
@@ -23,7 +27,6 @@ type Authenticator struct {
 
 func NewAuthenticator(inputs AuthenticatorInputs,
 	tokenClient TokenExchanger) *Authenticator {
-
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
 		client:              &http.Client{},
@@ -52,11 +55,23 @@ type Claims struct {
 //     authorization request.
 //  3. If a session token cookie is present, attach to the request.
 func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
-	logger := zerolog.Ctx(r.Context())
+	logger := zerolog.Ctx(r.Context()).With().
+		Str("authenticator", a.Name).Logger()
 
 	// Initialise an empty claims struct, this will be returned even in event
 	// of an error
 	claims := &Claims{}
+
+	// Check the origin is allowed
+	if isAllowed, err := a.isOriginAllowed(r); err != nil {
+		logger.Error().Err(err).Msg("Failed to check origin")
+		return false, claims
+	} else if !isAllowed {
+		logger.Debug().Strs("allowed_origins", a.AllowedOrigins).
+			Msg("Origin not allowed")
+		return false, claims
+	}
+	logger.Debug().Str("origin", r.Header.Get("Origin")).Msg("Origin allowed")
 
 	// Create the authentication request
 	authRequest, err := a.createAuthRequest(r)
@@ -64,6 +79,7 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 		logger.Error().Err(err).Msg("Failed to create authentication request")
 		return false, claims
 	}
+	logger.Debug().Msg("Authentication request created")
 
 	// Send the authentication request
 	resp, err := a.client.Do(authRequest)
@@ -71,6 +87,8 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 		logger.Error().Err(err).Msg("Failed to send authentication request")
 		return false, claims
 	}
+	defer resp.Body.Close()
+	logger.Debug().Msg("Authentication request sent")
 
 	// Check the response status code is outwith the 2xx range
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -98,8 +116,46 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 		logger.Warn().Msgf("'%s' header missing from auth response",
 			claimsHeaderName)
 	}
+	logger.Debug().Interface("claims", claims).Msg("Claims extracted")
+	logger.Info().Str("username", claims.Username).Msg("User authenticated")
 
 	return true, claims
+}
+
+func (a *Authenticator) isOriginAllowed(r *http.Request) (bool, error) {
+	logger := *zerolog.Ctx(r.Context())
+
+	origin := r.Header.Get("Origin")
+	parsedURL, err := url.Parse(origin)
+	if err != nil {
+		logger.Error().Err(err).Str("origin", origin).
+			Msg("Failed to parse origin")
+		return false, err
+	}
+	host := parsedURL.Hostname()
+
+	logger = logger.With().Str("host", host).Logger()
+	logger.Debug().Msg("Checking origin")
+
+	for _, pattern := range a.AllowedOrigins {
+		// Convert wildcard pattern to regular expression
+		regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
+		regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
+
+		matched, err := regexp.MatchString(regexPattern, host)
+		if err != nil {
+			logger.Error().Str("pattern", pattern).Err(err).
+				Msg("Error checking origin")
+		}
+		if matched {
+			logger.Debug().Str("pattern", pattern).Msg("Origin allowed")
+			return true, nil
+		}
+	}
+
+	logger.Debug().Strs("allowed_origins", a.AllowedOrigins).
+		Msg("Origin not allowed")
+	return false, nil
 }
 
 func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error) {
