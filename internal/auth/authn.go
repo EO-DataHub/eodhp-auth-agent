@@ -209,6 +209,8 @@ func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error
 		logger.Debug().Msg("Session token found")
 		// Attach the named session cookie to the auth request
 		authRequest.AddCookie(cookie)
+	default:
+		logger.Warn().Msg("No authentication method found")
 	}
 
 	return authRequest, nil
