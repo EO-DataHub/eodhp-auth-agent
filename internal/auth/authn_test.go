@@ -196,7 +196,7 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := setSuccessResponse(w); err != nil {
+			if err := setAuthenticatedResponse(w); err != nil {
 				t.Fatalf("Error creating response: %v", err)
 			}
 		}))
@@ -424,7 +424,7 @@ func createRequest(method, url, origin string) (*http.Request, error) {
 	return req, nil
 }
 
-func setSuccessResponse(w http.ResponseWriter) error {
+func setAuthenticatedResponse(w http.ResponseWriter) error {
 	claims := &Claims{
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Hour).Unix(),

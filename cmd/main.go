@@ -46,7 +46,7 @@ func authHandler(c config) func(w http.ResponseWriter, r *http.Request) {
 	for i, a := range c.authenticators {
 		authenticators[i] = *auth.NewAuthenticator(a, tokenClient)
 	}
-	authorizer := auth.NewAuthorizer()
+	authorizer := auth.NewAuthorizer(c.authorizer)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Initialise authentication variables
@@ -63,7 +63,13 @@ func authHandler(c config) func(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Use the claims from the authenticated request to check authorization
-		isAuthorized := authorizer.IsAuthorized(r, *claims)
+		isAuthorized, err := authorizer.IsAuthorized(r, *claims)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to check authorization")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Internal server error"))
+			return
+		}
 
 		// Handle authentication requests
 		if isAuthorized {
@@ -85,6 +91,7 @@ func authHandler(c config) func(w http.ResponseWriter, r *http.Request) {
 // most to least specific, in terms of allowed origins.
 type config struct {
 	authenticators []auth.AuthenticatorInputs `yaml:"authenticators"`
+	authorizer     auth.AuthorizerInputs      `yaml:"authorizer"`
 }
 
 func loadConfig(path string) (*config, error) {
