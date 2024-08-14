@@ -27,6 +27,7 @@ type Authenticator struct {
 
 func NewAuthenticator(inputs AuthenticatorInputs,
 	tokenClient TokenExchanger) *Authenticator {
+
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
 		client:              &http.Client{},
@@ -46,14 +47,20 @@ type Claims struct {
 	} `json:"realm_access"`
 }
 
-// IsAuthenticated checks if the request is authenticated. Each authentication
-// method is mutually exclusive. The order of precedence is as follows:
+// IsAuthenticated checks if the request is authenticated.
+//
+// A request can only be successfully authenticated if the origin is allowed.
+//
+// Each authentication method is mutually exclusive. The order of precedence is
+// as follows:
 //  1. If the Authorization header contains an API Token, use that to exchange
 //     for a Bearer token and attach the Bearer token to the
 //     authorization request.
 //  2. If the Authorization header contains a Bearer token, attach to the
 //     authorization request.
 //  3. If a session token cookie is present, attach to the request.
+//
+// If the request is authenticated, the claims are returned.
 func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	logger := zerolog.Ctx(r.Context()).With().
 		Str("authenticator", a.Name).Logger()
@@ -109,12 +116,13 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 			strings.TrimPrefix(authHeader, "Bearer "), claims, nil); err != nil {
 			// Ignore validation errors (no need to check signing of key)
 			if _, ok := err.(*jwt.ValidationError); !ok {
-				logger.Warn().Err(err).Msg("Failed to decode bearer token")
+				logger.Warn().Str("claims header", claimsHeaderName).Err(err).
+					Msg("Failed to decode bearer token")
 			}
 		}
 	} else {
-		logger.Warn().Msgf("'%s' header missing from auth response",
-			claimsHeaderName)
+		logger.Warn().Str("claims header", claimsHeaderName).
+			Msg("Header missing from response")
 	}
 	logger.Debug().Interface("claims", claims).Msg("Claims extracted")
 	logger.Info().Str("username", claims.Username).Msg("User authenticated")
