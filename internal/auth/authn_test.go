@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -15,7 +16,7 @@ type mockTokens struct {
 	err   error
 }
 
-func (m *mockTokens) exchangeTokenForBearer(token string) (string, error) {
+func (m *mockTokens) GetJWTToken(apiToken string) (string, error) {
 	if m.err != nil {
 		return "", m.err
 	}
@@ -25,21 +26,17 @@ func (m *mockTokens) exchangeTokenForBearer(token string) (string, error) {
 func TestCreateAuthRequest_ValidAPIToken(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
-		AuthenticatorInputs: AuthenticatorInputs{
-			CookieName: "test-cookie",
-		},
 		tokens: &mockTokens{
-			token: "test-bearer",
+			token: "jwt-token",
 		},
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
-	req.Header.Set("Authorization", "Token test-token")
+	req.Header.Set("Authorization", "Bearer A1B2C3D4")
 
 	authRequest, err := a.createAuthRequest(req)
 
@@ -47,7 +44,7 @@ func TestCreateAuthRequest_ValidAPIToken(t *testing.T) {
 		t.Fatalf("Expected request to be created")
 	}
 
-	if authRequest.Header.Get("Authorization") != "Bearer test-bearer" {
+	if authRequest.Header.Get("Authorization") != "Bearer jwt-token" {
 		t.Fatalf("Incorrect Authorization header: %s",
 			authRequest.Header.Get("Authorization"))
 	}
@@ -65,13 +62,29 @@ func TestCreateAuthRequest_ValidBearerToken(t *testing.T) {
 		},
 	}
 
+	// Create token
+	claims := &Claims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		},
+		Username: "test-user",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test-role"},
+		},
+	}
+	token, err := createJWTToken(claims)
+	if err != nil {
+		t.Fatal("Failed to create JWT token")
+	}
+
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer test-bearer")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	authRequest, err := a.createAuthRequest(req)
 
@@ -79,7 +92,9 @@ func TestCreateAuthRequest_ValidBearerToken(t *testing.T) {
 		t.Fatalf("Expected request to be created")
 	}
 
-	if authRequest.Header.Get("Authorization") != "Bearer test-bearer" {
+	if authRequest.Header.Get("Authorization") !=
+		fmt.Sprintf("Bearer %s", token) {
+
 		t.Fatalf("Incorrect Authorization header: %s",
 			authRequest.Header.Get("Authorization"))
 	}
@@ -98,8 +113,7 @@ func TestCreateAuthRequest_ValidSession(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -137,8 +151,7 @@ func TestCreateAuthRequest_NoAuth(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -170,8 +183,7 @@ func TestCreateAuthRequest_TokenError(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -202,13 +214,18 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 		}))
 	defer server.Close()
 
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Error parsing URL: %v", err)
+	}
+
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AuthURL:        server.URL,
-			AuthMethod:     http.MethodGet,
-			CookieName:     "test-cookie",
-			AllowedOrigins: []string{"example.com", "test.com"},
+			AuthURL:    server.URL,
+			AuthMethod: http.MethodGet,
+			CookieName: "test-cookie",
+			Domains:    []string{parsedURL.Host},
 		},
 		client: server.Client(),
 		tokens: &mockTokens{
@@ -217,7 +234,7 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, server.URL, "https://test.com")
+	req, err := createRequest(http.MethodGet, server.URL)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -249,13 +266,18 @@ func TestIsAuthenticated_Unauthenticated(t *testing.T) {
 		}))
 	defer server.Close()
 
+	parsedURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("Error parsing URL: %v", err)
+	}
+
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AuthURL:        server.URL,
-			AuthMethod:     http.MethodGet,
-			CookieName:     "test-cookie",
-			AllowedOrigins: []string{"example.com", "test.com"},
+			AuthURL:    server.URL,
+			AuthMethod: http.MethodGet,
+			CookieName: "test-cookie",
+			Domains:    []string{parsedURL.Host},
 		},
 		client: server.Client(),
 		tokens: &mockTokens{
@@ -264,7 +286,7 @@ func TestIsAuthenticated_Unauthenticated(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, server.URL, "https://test.com")
+	req, err := createRequest(http.MethodGet, server.URL)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -295,10 +317,10 @@ func TestIsAuthenticated_UnallowedOrigin(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AuthURL:        server.URL,
-			AuthMethod:     http.MethodGet,
-			CookieName:     "test-cookie",
-			AllowedOrigins: []string{"example.com"},
+			AuthURL:    server.URL,
+			AuthMethod: http.MethodGet,
+			CookieName: "test-cookie",
+			Domains:    []string{server.URL},
 		},
 		client: server.Client(),
 		tokens: &mockTokens{
@@ -307,7 +329,7 @@ func TestIsAuthenticated_UnallowedOrigin(t *testing.T) {
 	}
 
 	// Create a new request with an API token
-	req, err := createRequest(http.MethodGet, server.URL, "https://test.com")
+	req, err := createRequest(http.MethodGet, server.URL)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -331,18 +353,17 @@ func TestIsOriginAllowed_OriginAllowedSpecific(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AllowedOrigins: []string{"example.com", "test.com"},
+			Domains: []string{"example.com", "test.com"},
 		},
 	}
 
 	// Create a new request with the origin set
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	if isAllowed, err := a.isOriginAllowed(req); err != nil {
+	if isAllowed, err := a.isHostAllowed(req); err != nil {
 		t.Fatalf("Error checking origin")
 	} else if !isAllowed {
 		t.Fatalf("Expected origin to be allowed")
@@ -353,18 +374,17 @@ func TestIsOriginAllowed_OriginAllowedWildcard(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AllowedOrigins: []string{"*"},
+			Domains: []string{"*"},
 		},
 	}
 
 	// Create a new request with the origin set
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://test.com")
+	req, err := createRequest(http.MethodGet, "https://test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	if isAllowed, err := a.isOriginAllowed(req); err != nil {
+	if isAllowed, err := a.isHostAllowed(req); err != nil {
 		t.Fatalf("Error checking origin")
 	} else if !isAllowed {
 		t.Fatalf("Expected origin to be allowed")
@@ -375,18 +395,17 @@ func TestIsOriginAllowed_OriginNotAllowed(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AllowedOrigins: []string{"test.com"},
+			Domains: []string{"test.com"},
 		},
 	}
 
 	// Create a new request with the origin set
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://example.com")
+	req, err := createRequest(http.MethodGet, "https://example.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	if isAllowed, err := a.isOriginAllowed(req); err != nil {
+	if isAllowed, err := a.isHostAllowed(req); err != nil {
 		t.Fatalf("Error checking origin")
 	} else if isAllowed {
 		t.Fatalf("Expected origin to be disallowed")
@@ -397,30 +416,28 @@ func TestIsOriginAllowed_OriginAllowedPartialWildcard(t *testing.T) {
 	// Create a new authenticator
 	a := Authenticator{
 		AuthenticatorInputs: AuthenticatorInputs{
-			AllowedOrigins: []string{"*.test.com"},
+			Domains: []string{"*.test.com"},
 		},
 	}
 
 	// Create a new request with the origin set
-	req, err := createRequest(http.MethodGet, "https://target.com",
-		"https://sub.test.com")
+	req, err := createRequest(http.MethodGet, "https://sub.test.com")
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	if isAllowed, err := a.isOriginAllowed(req); err != nil {
+	if isAllowed, err := a.isHostAllowed(req); err != nil {
 		t.Fatalf("Error checking origin")
 	} else if !isAllowed {
 		t.Fatalf("Expected origin to be allowed")
 	}
 }
 
-func createRequest(method, url, origin string) (*http.Request, error) {
+func createRequest(method, url string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Origin", origin)
 	return req, nil
 }
 
@@ -436,14 +453,22 @@ func setAuthenticatedResponse(w http.ResponseWriter) error {
 			Roles: []string{"test-role"},
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret := []byte("your-secret-key")
-	tokenString, err := token.SignedString(secret)
+	token, err := createJWTToken(claims)
 	if err != nil {
 		return err
 	}
 	w.Header().Set("X-Auth-Request-Access-Token",
-		fmt.Sprintf("Bearer %s", tokenString))
+		fmt.Sprintf("Bearer %s", token))
 	w.WriteHeader(http.StatusOK)
 	return nil
+}
+
+func createJWTToken(claims *Claims) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secret := []byte("your-secret-key")
+	signedToken, err := token.SignedString(secret)
+	if err != nil {
+		return "", err
+	}
+	return signedToken, nil
 }

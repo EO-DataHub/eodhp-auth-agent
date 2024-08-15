@@ -1,9 +1,9 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 
@@ -12,11 +12,11 @@ import (
 )
 
 type AuthenticatorInputs struct {
-	Name           string   `yaml:"name"`
-	AuthURL        string   `yaml:"auth_url"`
-	AuthMethod     string   `yaml:"auth_method"`
-	CookieName     string   `yaml:"cookie_name"`
-	AllowedOrigins []string `yaml:"allowed_origins"`
+	Name       string   `yaml:"name"`
+	AuthURL    string   `yaml:"auth_url"`
+	AuthMethod string   `yaml:"auth_method"`
+	CookieName string   `yaml:"cookie_name"`
+	Domains    []string `yaml:"domains"`
 }
 
 type Authenticator struct {
@@ -36,7 +36,7 @@ func NewAuthenticator(inputs AuthenticatorInputs,
 }
 
 type TokenExchanger interface {
-	exchangeTokenForBearer(token string) (string, error)
+	GetJWTToken(apiToken string) (string, error)
 }
 
 type Claims struct {
@@ -49,7 +49,8 @@ type Claims struct {
 
 // IsAuthenticated checks if the request is authenticated.
 //
-// A request can only be successfully authenticated if the origin is allowed.
+// A request can only be successfully authenticated if the host domain is
+// allowed.
 //
 // Each authentication method is mutually exclusive. The order of precedence is
 // as follows:
@@ -63,22 +64,20 @@ type Claims struct {
 // If the request is authenticated, the claims are returned.
 func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	logger := zerolog.Ctx(r.Context()).With().
-		Str("authenticator", a.Name).Logger()
+		Str("authenticator", a.Name).Str("host", r.Host).Logger()
 
 	// Initialise an empty claims struct, this will be returned even in event
 	// of an error
 	claims := &Claims{}
 
-	// Check the origin is allowed
-	if isAllowed, err := a.isOriginAllowed(r); err != nil {
-		logger.Error().Err(err).Msg("Failed to check origin")
+	// Check the target domain of the request, deny if not allowed
+	if isAllowed, err := a.isHostAllowed(r); err != nil {
+		logger.Error().Err(err).Msg("Failed to check domain")
 		return false, claims
 	} else if !isAllowed {
-		logger.Debug().Strs("allowed_origins", a.AllowedOrigins).
-			Msg("Origin not allowed")
 		return false, claims
 	}
-	logger.Debug().Str("origin", r.Header.Get("Origin")).Msg("Origin allowed")
+	logger.Debug().Msg("Host allowed")
 
 	// Create the authentication request
 	authRequest, err := a.createAuthRequest(r)
@@ -130,39 +129,27 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	return true, claims
 }
 
-func (a *Authenticator) isOriginAllowed(r *http.Request) (bool, error) {
+func (a *Authenticator) isHostAllowed(r *http.Request) (bool, error) {
 	logger := *zerolog.Ctx(r.Context())
 
-	origin := r.Header.Get("Origin")
-	parsedURL, err := url.Parse(origin)
-	if err != nil {
-		logger.Error().Err(err).Str("origin", origin).
-			Msg("Failed to parse origin")
-		return false, err
-	}
-	host := parsedURL.Hostname()
-
-	logger = logger.With().Str("host", host).Logger()
-	logger.Debug().Msg("Checking origin")
-
-	for _, pattern := range a.AllowedOrigins {
+	logger.Debug().Msg("Checking host domain")
+	for _, pattern := range a.Domains {
 		// Convert wildcard pattern to regular expression
 		regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
 		regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
 
-		matched, err := regexp.MatchString(regexPattern, host)
+		matched, err := regexp.MatchString(regexPattern, r.Host)
 		if err != nil {
 			logger.Error().Str("pattern", pattern).Err(err).
-				Msg("Error checking origin")
+				Msg("Error checking host domain")
 		}
 		if matched {
-			logger.Debug().Str("pattern", pattern).Msg("Origin allowed")
+			logger.Debug().Str("pattern", pattern).Msg("Host domain allowed")
 			return true, nil
 		}
 	}
 
-	logger.Debug().Strs("allowed_origins", a.AllowedOrigins).
-		Msg("Origin not allowed")
+	logger.Debug().Strs("domains", a.Domains).Msg("Domain not allowed")
 	return false, nil
 }
 
@@ -176,42 +163,95 @@ func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error
 		return nil, err
 	}
 
-	// Extract the auth header
-	authHeader := r.Header.Get("Authorization")
-	switch {
-	case strings.HasPrefix(authHeader, "Token "):
-		logger.Debug().Msg("API Token found in Authorization header")
-		token := strings.TrimPrefix(authHeader, "Token ")
-		bearer, err := a.tokens.exchangeTokenForBearer(token)
-		if err != nil {
-			logger.Warn().Err(err).Msgf(
-				"Failed to exchange API token for bearer token")
-			break
-		}
-		logger.Debug().Msg("API token exchnaged for bearer token")
-		// Attach the bearer token to the auth request
+	// Extract the auth header and attach to the auth request, if present
+	token, err := a.getAuthorizationJWTToken(r)
+	if err == nil {
+		logger.Debug().Msg("JWT extracted from Authorization header")
+		// Set the JWT token as a bearer token in Authorization header
 		authRequest.Header.Set(
-			"Authorization", fmt.Sprintf("Bearer %s", bearer))
-	case strings.HasPrefix(authHeader, "Bearer "):
-		logger.Debug().Msg("Bearer found in Authorization header")
-		// Attach the bearer token to the auth request
-		authRequest.Header.Set("Authorization", authHeader)
-	case a.CookieName != "":
+			"Authorization", fmt.Sprintf("Bearer %s", token))
+	} else {
+		logger.Debug().Err(err).
+			Msg("Failed to extract JWT from Authorization header")
+	}
+
+	// Extract the session token cookie and attach to the auth request, if
+	// present
+	if a.CookieName != "" {
 		cookie, err := r.Cookie(a.CookieName)
-		if err != nil {
+		if err == nil {
+			logger.Debug().Msg("Session token found")
+			// Attach the named session cookie to the auth request
+			authRequest.AddCookie(cookie)
+		} else {
 			if err == http.ErrNoCookie {
 				logger.Debug().Msg("No session token found")
 			} else {
 				logger.Debug().Msgf("Error reading cookie: %s", err.Error())
 			}
-			break
 		}
-		logger.Debug().Msg("Session token found")
-		// Attach the named session cookie to the auth request
-		authRequest.AddCookie(cookie)
-	default:
-		logger.Warn().Msg("No authentication method found")
 	}
 
 	return authRequest, nil
+}
+
+func (a *Authenticator) getAuthorizationJWTToken(
+	r *http.Request) (string, error) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// Check if Authorization header is present
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		err := errors.New("no authorization header")
+		logger.Debug().Err(err)
+		return "", err
+	}
+
+	// Check if Authorization header is Bearer token
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		err := errors.New(
+			"invalid authorization header, should be bearer token")
+		logger.Debug().Err(err)
+		return "", err
+	}
+
+	// Check if Bearer token is JWT, return it as is if so
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if _, err := parseJWTToken(token); err == nil {
+		logger.Debug().Msg("Bearer token is JWT")
+		// Return the JWT token from the Authorization header
+		return token, nil
+	}
+	logger.Debug().
+		Msg("Bearer token is not JWT, assuming it is API token")
+
+	// Exchange API token for JWT token, return the JWT token if successful
+	token, err := a.tokens.GetJWTToken(token)
+	if err == nil {
+		logger.Debug().Msg("API token exchanged for JWT token")
+		// Return the JWT token exchanged from the API token
+		return token, nil
+	} else {
+		logger.Debug().Err(err).Msg("Failed to exchange API token for JWT")
+		return "", err
+	}
+}
+
+func parseJWTToken(token string) (*Claims, error) {
+	claims := &Claims{}
+	// Check if token is JWT by attempting to parse it
+	if t, err := jwt.ParseWithClaims(token, claims, nil); err != nil {
+		// Ignore validation errors (no need to check signing of key)
+		if _, ok := err.(*jwt.ValidationError); !ok {
+			return nil, err
+		}
+
+		// Check if token was decoded successfully
+		if t == nil {
+			// Return an error if the token was not decoded successfully
+			return nil, errors.New("invalid jwt token")
+		}
+	}
+	return claims, nil
 }
