@@ -1,10 +1,11 @@
-package auth
+package authz
 
 import (
 	"bytes"
 	"encoding/json"
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/rs/zerolog"
 )
 
@@ -26,17 +27,19 @@ type AuthorizerInputs struct {
 
 type Authorizer struct {
 	AuthorizerInputs
-	client *http.Client
+	http *http.Client
 }
 
 func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
 	return Authorizer{
 		AuthorizerInputs: inputs,
-		client:           &http.Client{},
+		http:             &http.Client{},
 	}
 }
 
-func (a Authorizer) IsAuthorized(r *http.Request, claims Claims) (bool, error) {
+func (a Authorizer) IsAuthorized(r *http.Request, claims authn.Claims) (bool, 
+	error) {
+		
 	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", "OPA").Logger()
 
 	// Create the OPA request body
@@ -55,15 +58,15 @@ func (a Authorizer) IsAuthorized(r *http.Request, claims Claims) (bool, error) {
 	// Create the authorization request
 	authRequest, err := a.createAuthRequest(body)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create authorization request")
+		logger.Error().Err(err).Msg("failed to create authorization request")
 		return false, err
 	}
-	logger.Debug().Msg("Authentication request created")
+	logger.Debug().Msg("authentication request created")
 
 	// Send the authorization request
-	resp, err := a.client.Do(authRequest)
+	resp, err := a.http.Do(authRequest)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to send authorization request")
+		logger.Error().Err(err).Msg("failed to send authorization request")
 		return false, err
 	}
 	defer resp.Body.Close()
@@ -72,11 +75,11 @@ func (a Authorizer) IsAuthorized(r *http.Request, claims Claims) (bool, error) {
 	var opaResp opaResponseBody
 	err = json.NewDecoder(resp.Body).Decode(&opaResp)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to decode authorization response")
+		logger.Error().Err(err).Msg("failed to decode authorization response")
 		return false, err
 	}
 	logger.Debug().Bool("result", opaResp.Result).
-		Msg("Authorization response received")
+		Msg("authorization response received")
 
 	return opaResp.Result, nil
 }

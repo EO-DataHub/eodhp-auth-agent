@@ -1,4 +1,6 @@
-package auth
+//go:build !production
+
+package authn
 
 import (
 	"fmt"
@@ -8,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/golang-jwt/jwt"
+	"github.com/stretchr/testify/assert"
 )
 
 type mockTokens struct {
@@ -33,25 +37,16 @@ func TestCreateAuthRequest_ValidAPIToken(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer A1B2C3D4")
 
 	authRequest, err := a.createAuthRequest(req)
 
-	if err != nil {
-		t.Fatalf("Expected request to be created")
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, authRequest.Header.Get("Authorization"), "Bearer jwt-token")
 
-	if authRequest.Header.Get("Authorization") != "Bearer jwt-token" {
-		t.Fatalf("Incorrect Authorization header: %s",
-			authRequest.Header.Get("Authorization"))
-	}
-
-	if _, err := authRequest.Cookie("test-cookie"); err == nil {
-		t.Fatalf("No cookie should be attached")
-	}
+	_, err = authRequest.Cookie("test-cookie")
+	assert.Error(t, err)
 }
 
 func TestCreateAuthRequest_ValidBearerToken(t *testing.T) {
@@ -75,33 +70,22 @@ func TestCreateAuthRequest_ValidBearerToken(t *testing.T) {
 		},
 	}
 	token, err := createJWTToken(claims)
-	if err != nil {
-		t.Fatal("Failed to create JWT token")
-	}
+	assert.NoError(t, err)
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
+
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 
 	authRequest, err := a.createAuthRequest(req)
+	assert.NoError(t, err)
 
-	if err != nil {
-		t.Fatalf("Expected request to be created")
-	}
+	assert.Equal(t, authRequest.Header.Get("Authorization"),
+		fmt.Sprintf("Bearer %s", token))
 
-	if authRequest.Header.Get("Authorization") !=
-		fmt.Sprintf("Bearer %s", token) {
-
-		t.Fatalf("Incorrect Authorization header: %s",
-			authRequest.Header.Get("Authorization"))
-	}
-
-	if cookie, err := authRequest.Cookie("test-cookie"); err == nil {
-		t.Fatalf("No cookie should be attached: %s", cookie.Value)
-	}
+	_, err = authRequest.Cookie("test-cookie")
+	assert.Error(t, err)
 }
 
 func TestCreateAuthRequest_ValidSession(t *testing.T) {
@@ -114,32 +98,20 @@ func TestCreateAuthRequest_ValidSession(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
+
 	req.AddCookie(&http.Cookie{
 		Name:  "test-cookie",
 		Value: "abcdefghi",
 	})
 
 	authRequest, err := a.createAuthRequest(req)
-
-	if err != nil {
-		t.Fatalf("Expected request to be created")
-	}
+	assert.NoError(t, err)
 
 	cookie, err := authRequest.Cookie("test-cookie")
-	if err != nil {
-		t.Fatalf("Expected cookie to be attached")
-	}
-
-	if cookie.Value != "abcdefghi" {
-		t.Fatalf("Incorrect Cookie: %s", cookie.Value)
-	}
-
-	if header := authRequest.Header.Get("Authorization"); header != "" {
-		t.Fatalf("No Authorization header should be attached: %s", header)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, cookie.Value, "abcdefghi")
+	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
 }
 
 func TestCreateAuthRequest_NoAuth(t *testing.T) {
@@ -152,23 +124,14 @@ func TestCreateAuthRequest_NoAuth(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
 	authRequest, err := a.createAuthRequest(req)
+	assert.NoError(t, err)
+	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
 
-	if err != nil {
-		t.Fatalf("Expected request to be created")
-	}
-
-	if header := authRequest.Header.Get("Authorization"); header != "" {
-		t.Fatalf("No Authorization header should be attached: %s", header)
-	}
-
-	if cookie, err := authRequest.Cookie("test-cookie"); err == nil {
-		t.Fatalf("No cookie should be attached: %s", cookie.Value)
-	}
+	_, err = authRequest.Cookie("test-cookie")
+	assert.Error(t, err)
 }
 
 func TestCreateAuthRequest_TokenError(t *testing.T) {
@@ -178,30 +141,22 @@ func TestCreateAuthRequest_TokenError(t *testing.T) {
 			CookieName: "test-cookie",
 		},
 		tokens: &mockTokens{
-			err: ErrInvalidToken,
+			err: db.ErrInvalidToken,
 		},
 	}
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
+
 	req.Header.Set("Authorization", "Token test-token")
 
 	authRequest, err := a.createAuthRequest(req)
+	assert.NoError(t, err)
+	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
 
-	if err != nil {
-		t.Fatalf("Expected request to be created")
-	}
-
-	if header := authRequest.Header.Get("Authorization"); header != "" {
-		t.Fatalf("No Authorization header should be attached: %s", header)
-	}
-
-	if cookie, err := authRequest.Cookie("test-cookie"); err == nil {
-		t.Fatalf("No cookie should be attached: %s", cookie.Value)
-	}
+	_, err = authRequest.Cookie("test-cookie")
+	assert.Error(t, err)
 }
 
 func TestIsAuthenticated_Authenticated(t *testing.T) {
@@ -215,9 +170,7 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 	defer server.Close()
 
 	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Create a new authenticator
 	a := Authenticator{
@@ -227,7 +180,7 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 			CookieName: "test-cookie",
 			Domains:    []string{parsedURL.Host},
 		},
-		client: server.Client(),
+		http: server.Client(),
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -235,27 +188,13 @@ func TestIsAuthenticated_Authenticated(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, server.URL)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
 	isAuthenticated, claims := a.IsAuthenticated(req)
 
-	if !isAuthenticated {
-		t.Fatalf("Expected request to be authenticated")
-	}
-
-	if claims.Username != "test-user" {
-		t.Fatalf("Incorrect username: %s", claims.Username)
-	}
-
-	if len(claims.RealmAccess.Roles) != 1 {
-		t.Fatalf("Incorrect number of roles: %d", len(claims.RealmAccess.Roles))
-	}
-
-	if claims.RealmAccess.Roles[0] != "test-role" {
-		t.Fatalf("Incorrect role: %s", claims.RealmAccess.Roles[0])
-	}
+	assert.True(t, isAuthenticated)
+	assert.Equal(t, claims.Username, "test-user")
+	assert.Equal(t, claims.RealmAccess.Roles, []string{"test-role"})
 }
 
 func TestIsAuthenticated_Unauthenticated(t *testing.T) {
@@ -267,9 +206,7 @@ func TestIsAuthenticated_Unauthenticated(t *testing.T) {
 	defer server.Close()
 
 	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// Create a new authenticator
 	a := Authenticator{
@@ -279,7 +216,7 @@ func TestIsAuthenticated_Unauthenticated(t *testing.T) {
 			CookieName: "test-cookie",
 			Domains:    []string{parsedURL.Host},
 		},
-		client: server.Client(),
+		http: server.Client(),
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -287,23 +224,12 @@ func TestIsAuthenticated_Unauthenticated(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, server.URL)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
 	isAuthenticated, claims := a.IsAuthenticated(req)
-
-	if isAuthenticated {
-		t.Fatalf("Expected request to be unauthenticated")
-	}
-
-	if claims.Username != "" {
-		t.Fatalf("Incorrect username: %s", claims.Username)
-	}
-
-	if len(claims.RealmAccess.Roles) != 0 {
-		t.Fatalf("Incorrect number of roles: %d", len(claims.RealmAccess.Roles))
-	}
+	assert.False(t, isAuthenticated)
+	assert.Equal(t, claims.Username, "")
+	assert.Equal(t, claims.RealmAccess.Roles, []string([]string(nil)))
 }
 
 func TestIsAuthenticated_UnallowedOrigin(t *testing.T) {
@@ -322,7 +248,7 @@ func TestIsAuthenticated_UnallowedOrigin(t *testing.T) {
 			CookieName: "test-cookie",
 			Domains:    []string{server.URL},
 		},
-		client: server.Client(),
+		http: server.Client(),
 		tokens: &mockTokens{
 			token: "test-bearer",
 		},
@@ -330,23 +256,12 @@ func TestIsAuthenticated_UnallowedOrigin(t *testing.T) {
 
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, server.URL)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
 	isAuthenticated, claims := a.IsAuthenticated(req)
-
-	if isAuthenticated {
-		t.Fatalf("Expected request to be unauthenticated")
-	}
-
-	if claims.Username != "" {
-		t.Fatalf("Incorrect username: %s", claims.Username)
-	}
-
-	if len(claims.RealmAccess.Roles) != 0 {
-		t.Fatalf("Incorrect number of roles: %d", len(claims.RealmAccess.Roles))
-	}
+	assert.False(t, isAuthenticated)
+	assert.Equal(t, claims.Username, "")
+	assert.Equal(t, claims.RealmAccess.Roles, []string([]string(nil)))
 }
 
 func TestIsOriginAllowed_OriginAllowedSpecific(t *testing.T) {
@@ -359,15 +274,11 @@ func TestIsOriginAllowed_OriginAllowedSpecific(t *testing.T) {
 
 	// Create a new request with the origin set
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
-	if isAllowed, err := a.isHostAllowed(req); err != nil {
-		t.Fatalf("Error checking origin")
-	} else if !isAllowed {
-		t.Fatalf("Expected origin to be allowed")
-	}
+	isAllowed, err := a.isHostAllowed(req)
+	assert.NoError(t, err)
+	assert.True(t, isAllowed)
 }
 
 func TestIsOriginAllowed_OriginAllowedWildcard(t *testing.T) {
@@ -380,15 +291,11 @@ func TestIsOriginAllowed_OriginAllowedWildcard(t *testing.T) {
 
 	// Create a new request with the origin set
 	req, err := createRequest(http.MethodGet, "https://test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
-	if isAllowed, err := a.isHostAllowed(req); err != nil {
-		t.Fatalf("Error checking origin")
-	} else if !isAllowed {
-		t.Fatalf("Expected origin to be allowed")
-	}
+	isAllowed, err := a.isHostAllowed(req)
+	assert.NoError(t, err)
+	assert.True(t, isAllowed)
 }
 
 func TestIsOriginAllowed_OriginNotAllowed(t *testing.T) {
@@ -401,15 +308,11 @@ func TestIsOriginAllowed_OriginNotAllowed(t *testing.T) {
 
 	// Create a new request with the origin set
 	req, err := createRequest(http.MethodGet, "https://example.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
-	if isAllowed, err := a.isHostAllowed(req); err != nil {
-		t.Fatalf("Error checking origin")
-	} else if isAllowed {
-		t.Fatalf("Expected origin to be disallowed")
-	}
+	isAllowed, err := a.isHostAllowed(req)
+	assert.NoError(t, err)
+	assert.False(t, isAllowed)
 }
 
 func TestIsOriginAllowed_OriginAllowedPartialWildcard(t *testing.T) {
@@ -422,15 +325,11 @@ func TestIsOriginAllowed_OriginAllowedPartialWildcard(t *testing.T) {
 
 	// Create a new request with the origin set
 	req, err := createRequest(http.MethodGet, "https://sub.test.com")
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err)
 
-	if isAllowed, err := a.isHostAllowed(req); err != nil {
-		t.Fatalf("Error checking origin")
-	} else if !isAllowed {
-		t.Fatalf("Expected origin to be allowed")
-	}
+	isAllowed, err := a.isHostAllowed(req)
+	assert.NoError(t, err)
+	assert.True(t, isAllowed)
 }
 
 func createRequest(method, url string) (*http.Request, error) {
