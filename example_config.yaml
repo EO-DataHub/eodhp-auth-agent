@@ -23,6 +23,9 @@ keycloak:
   client_id: myclient
   client_secret: mysecret
 database:
+  # drivers "sqlite3" and "pgx" are supported
   driver: sqlite3
   source: ./db.sqlite3
+  # driver: pgx
+  # source: postgres://username:password@localhost:5432/database_name
 api_token_prefix: ABCD
