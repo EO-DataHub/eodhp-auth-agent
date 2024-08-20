@@ -24,7 +24,7 @@ type mockTokens struct {
 	updateCalled bool
 }
 
-func (m *mockTokens) GetToken(apiToken string) (*db.Token, error) {
+func (m *mockTokens) GetTokenByAPIToken(apiToken string) (*db.Token, error) {
 	m.getCalled = true
 
 	if m.getErr != nil {

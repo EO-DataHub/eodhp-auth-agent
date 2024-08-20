@@ -92,7 +92,7 @@ func TestGetToken_TokenExists(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Get the token
-	result, err := c.GetToken(token.Token)
+	result, err := c.GetTokenByAPIToken(token.Token)
 	assert.NoError(t, err)
 	assert.Equal(t, token.Token, result.Token)
 }
@@ -106,7 +106,7 @@ func TestGetToken_TokenDoesNotExist(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Get the token
-	_, err = c.GetToken(apiToken)
+	_, err = c.GetTokenByAPIToken(apiToken)
 	assert.ErrorIs(t, err, ErrInvalidToken)
 }
 
@@ -135,7 +135,7 @@ func TestUpdateToken_Updated(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Get the token
-	result, err := c.GetToken(token.Token)
+	result, err := c.GetTokenByAPIToken(token.Token)
 	assert.NoError(t, err)
 	assert.Equal(t, token.Access, result.Access)
 	assert.Equal(t, token.Refresh, result.Refresh)

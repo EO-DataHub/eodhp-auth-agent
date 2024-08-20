@@ -30,7 +30,7 @@ type Authenticator struct {
 }
 
 type TokenDB interface {
-	GetToken(apiToken string) (*db.Token, error)
+	GetTokenByAPIToken(apiToken string) (*db.Token, error)
 	UpdateToken(token db.Token) error
 }
 
@@ -127,7 +127,7 @@ func (a Authenticator) GetAuthenticatedClaims(r *http.Request) (*Claims, error) 
 		return nil, ErrMissingAuthResponseClaims
 	}
 
-	claims, err := parseJWTToken(
+	claims, err := ParseJWTToken(
 		strings.TrimPrefix(authHeader, "Bearer "))
 	if err != nil {
 		logger.Error().Err(err).Str("claims header", claimsHeaderName).
@@ -230,7 +230,7 @@ func (a Authenticator) getJWTToken(
 
 	// Check if Bearer token is JWT, return it as is if so
 	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if _, err := parseJWTToken(token); err == nil {
+	if _, err := ParseJWTToken(token); err == nil {
 		logger.Debug().Msg("bearer token is jwt")
 		// Return the JWT token from the Authorization header
 		return token, nil
@@ -253,7 +253,7 @@ func (a Authenticator) getJWTToken(
 
 func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	// Get token from DB
-	token, err := a.tokenDB.GetToken(apiToken)
+	token, err := a.tokenDB.GetTokenByAPIToken(apiToken)
 	if err != nil {
 		return "", err
 	}
@@ -280,7 +280,7 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	return token.Access, nil
 }
 
-func parseJWTToken(token string) (*Claims, error) {
+func ParseJWTToken(token string) (*Claims, error) {
 	claims := &Claims{}
 	// Check if token is JWT by attempting to parse it
 	if t, err := jwt.ParseWithClaims(token, claims, nil); err != nil {

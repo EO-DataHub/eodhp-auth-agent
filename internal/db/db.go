@@ -17,9 +17,9 @@ type User struct {
 }
 
 type Token struct {
-	ID           string
-	Token        string
-	UserID       string
+	ID           string `json:"id"`
+	Token        string `json:"token"`
+	UserID       string `json:"user"`
 	Access       string
 	AccessExpiry int64
 	Refresh      string
@@ -156,7 +156,29 @@ func (t TokenDB) CreateUser(user User) error {
 	return nil
 }
 
-func (t TokenDB) GetToken(apiToken string) (*Token, error) {
+func (t TokenDB) GetTokenByID(id string) (*Token, error) {
+	t.log.Debug().Msg("getting token by id")
+
+	token := &Token{}
+	err := t.db.QueryRow(
+		`SELECT id, token, user, access, access_expiry, refresh
+		FROM tokens WHERE id = $1`, id).
+		Scan(&token.ID, &token.Token, &token.UserID, &token.Access,
+			&token.AccessExpiry, &token.Refresh)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			t.log.Debug().Msg("token not found")
+			return nil, ErrInvalidToken
+		}
+		t.log.Err(err).Msg("failed to get token by id")
+		return nil, err
+	}
+
+	t.log.Debug().Msg("token found")
+	return token, nil
+}
+
+func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	t.log.Debug().Msg("getting token by api token")
 
 	token := &Token{}
@@ -209,6 +231,48 @@ func (t TokenDB) UpdateToken(token Token) error {
 	}
 
 	t.log.Debug().Msg("token updated")
+	return nil
+}
+
+func (t TokenDB) ListUserTokens(userID string) ([]Token, error) {
+	t.log.Debug().Msg("listing user tokens")
+
+	rows, err := t.db.Query(
+		`SELECT id, token, user, access, access_expiry, refresh
+		FROM tokens WHERE user = $1`, userID)
+	if err != nil {
+		t.log.Err(err).Msg("failed to list user tokens")
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []Token
+	for rows.Next() {
+		var token Token
+		err := rows.Scan(&token.ID, &token.Token, &token.UserID, &token.Access,
+			&token.AccessExpiry, &token.Refresh)
+		if err != nil {
+			t.log.Err(err).Msg("failed to scan token")
+			return nil, err
+		}
+		tokens = append(tokens, token)
+	}
+
+	t.log.Debug().Msg("user tokens listed")
+	return tokens, nil
+}
+
+func (t TokenDB) DeleteTokenByID(id string) error {
+	t.log.Debug().Msg("deleting token")
+
+	_, err := t.db.Exec(
+		`DELETE FROM tokens WHERE id = $1`, id)
+	if err != nil {
+		t.log.Err(err).Msg("failed to delete token")
+		return err
+	}
+
+	t.log.Debug().Msg("token deleted")
 	return nil
 }
 
