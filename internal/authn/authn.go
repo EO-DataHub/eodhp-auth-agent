@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
 )
@@ -21,22 +24,35 @@ type AuthenticatorInputs struct {
 
 type Authenticator struct {
 	AuthenticatorInputs
-	http   *http.Client
-	tokens TokenExchanger
+	http    *http.Client
+	tokenDB TokenDB
+	auth    AuthClient
 }
 
-func NewAuthenticator(inputs AuthenticatorInputs,
-	tokenClient TokenExchanger) *Authenticator {
+type TokenDB interface {
+	GetToken(apiToken string) (*db.Token, error)
+	UpdateToken(token db.Token) error
+}
+
+type AuthClient interface {
+	RefreshToken(refreshToken string) (*keycloak.TokenResponse, error)
+}
+
+var ErrInvalidHost = errors.New("authn: invalid host")
+var ErrAuthFailed = errors.New("authn: authentication failed")
+var ErrInvalidJWT = errors.New("authn: invalid jwt token")
+var ErrMissingAuthResponseClaims = errors.New(
+	"authn: missing auth response claims")
+
+func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
+	auth AuthClient) *Authenticator {
 
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
 		http:                &http.Client{},
-		tokens:              tokenClient,
+		tokenDB:             tokenDB,
+		auth:                auth,
 	}
-}
-
-type TokenExchanger interface {
-	GetJWTToken(apiToken string) (string, error)
 }
 
 type Claims struct {
@@ -47,35 +63,30 @@ type Claims struct {
 	} `json:"realm_access"`
 }
 
-// IsAuthenticated checks if the request is authenticated.
+// GetAuthenticatedClaims checks if the request is authenticated.
 //
-// A request can only be successfully authenticated if the host domain is
-// allowed.
-//
-// Each authentication method is mutually exclusive. The order of precedence is
+// A request can only be successfully authenticated if an authenticator for the
+// request host domain is present. The authenticator will attempt authentication
 // as follows:
-//  1. If the Authorization header contains an API Token, use that to exchange
-//     for a Bearer token and attach the Bearer token to the
+//
+//  1. If the Authorization header contains a Bearer access token, attach to the
 //     authorization request.
-//  2. If the Authorization header contains a Bearer token, attach to the
+//  2. Else if the Authorization header contains an API Token, use that to
+//     exchange for a Bearer token and attach the Bearer access token to the
 //     authorization request.
 //  3. If a session token cookie is present, attach to the request.
 //
 // If the request is authenticated, the claims are returned.
-func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
+func (a Authenticator) GetAuthenticatedClaims(r *http.Request) (*Claims, error) {
 	logger := zerolog.Ctx(r.Context()).With().
 		Str("authenticator", a.Name).Str("host", r.Host).Logger()
-
-	// Initialise an empty claims struct, this will be returned even in event
-	// of an error
-	claims := &Claims{}
 
 	// Check the target domain of the request, deny if not allowed
 	if isAllowed, err := a.isHostAllowed(r); err != nil {
 		logger.Error().Err(err).Msg("failed to check domain")
-		return false, claims
+		return nil, err
 	} else if !isAllowed {
-		return false, claims
+		return nil, ErrInvalidHost
 	}
 	logger.Debug().Msg("host allowed")
 
@@ -83,7 +94,7 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	authRequest, err := a.createAuthRequest(r)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create authentication request")
-		return false, claims
+		return nil, err
 	}
 	logger.Debug().Msg("authentication request created")
 
@@ -91,7 +102,7 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	resp, err := a.http.Do(authRequest)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to send authentication request")
-		return false, claims
+		return nil, err
 	}
 	defer resp.Body.Close()
 	logger.Debug().Msg("authentication request sent")
@@ -100,36 +111,37 @@ func (a *Authenticator) IsAuthenticated(r *http.Request) (bool, *Claims) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Info().
 			Int("status_code", resp.StatusCode).
-			Msg("cookie authentication request failed")
-		return false, claims
+			Msg("authentication request failed")
+		return nil, ErrAuthFailed
 	}
 	logger.Info().
 		Int("status_code", resp.StatusCode).
-		Msg("cookie authentication request succeeded")
+		Msg("authentication request succeeded")
 
 	// Extract the JWT claims from the response
 	claimsHeaderName := "X-Auth-Request-Access-Token"
 	authHeader := resp.Header.Get(claimsHeaderName)
-	if authHeader != "" {
-		if _, err := jwt.ParseWithClaims(
-			strings.TrimPrefix(authHeader, "Bearer "), claims, nil); err != nil {
-			// Ignore validation errors (no need to check signing of key)
-			if _, ok := err.(*jwt.ValidationError); !ok {
-				logger.Warn().Str("claims header", claimsHeaderName).Err(err).
-					Msg("failed to decode bearer token")
-			}
-		}
-	} else {
-		logger.Warn().Str("claims header", claimsHeaderName).
-			Msg("header missing from response")
+	if authHeader == "" {
+		logger.Error().Str("claims header", claimsHeaderName).
+			Err(ErrMissingAuthResponseClaims)
+		return nil, ErrMissingAuthResponseClaims
 	}
+
+	claims, err := parseJWTToken(
+		strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		logger.Error().Err(err).Str("claims header", claimsHeaderName).
+			Msg("failed to extract claims from auth response")
+		return nil, err
+	}
+
 	logger.Debug().Interface("claims", claims).Msg("claims extracted")
 	logger.Info().Str("username", claims.Username).Msg("user authenticated")
 
-	return true, claims
+	return claims, nil
 }
 
-func (a *Authenticator) isHostAllowed(r *http.Request) (bool, error) {
+func (a Authenticator) isHostAllowed(r *http.Request) (bool, error) {
 	logger := *zerolog.Ctx(r.Context())
 
 	logger.Debug().Msg("checking host domain")
@@ -153,7 +165,7 @@ func (a *Authenticator) isHostAllowed(r *http.Request) (bool, error) {
 	return false, nil
 }
 
-func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error) {
+func (a Authenticator) createAuthRequest(r *http.Request) (*http.Request, error) {
 	logger := zerolog.Ctx(r.Context())
 
 	// Create a subrequest to authenticate via upstream service
@@ -164,7 +176,7 @@ func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error
 	}
 
 	// Extract the auth header and attach to the auth request, if present
-	token, err := a.getAuthorizationJWTToken(r)
+	token, err := a.getJWTToken(r)
 	if err == nil {
 		logger.Debug().Msg("jwt extracted from authorization header")
 		// Set the JWT token as a bearer token in Authorization header
@@ -195,7 +207,7 @@ func (a *Authenticator) createAuthRequest(r *http.Request) (*http.Request, error
 	return authRequest, nil
 }
 
-func (a *Authenticator) getAuthorizationJWTToken(
+func (a Authenticator) getJWTToken(
 	r *http.Request) (string, error) {
 
 	logger := zerolog.Ctx(r.Context())
@@ -227,7 +239,7 @@ func (a *Authenticator) getAuthorizationJWTToken(
 		Msg("bearer token is not jwt, assuming it is api token")
 
 	// Exchange API token for JWT token, return the JWT token if successful
-	token, err := a.tokens.GetJWTToken(token)
+	token, err := a.exchangeAPIToken(token)
 	if err == nil {
 		logger.Debug().Msg("api token exchanged for jwt token")
 		// Return the JWT token exchanged from the API token
@@ -237,6 +249,35 @@ func (a *Authenticator) getAuthorizationJWTToken(
 			Msg("failed to exchange api token for jwt token")
 		return "", err
 	}
+}
+
+func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
+	// Get token from DB
+	token, err := a.tokenDB.GetToken(apiToken)
+	if err != nil {
+		return "", err
+	}
+
+	// Check token access expiry (include buffer for latency)
+	if time.Now().Add(5*time.Second).Unix() >= token.AccessExpiry {
+		// Refresh token if access has expired
+		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
+		if err != nil {
+			return "", err
+		}
+
+		// Update DB with new access token
+		token.Access = tokenResponse.AccessToken
+		token.Refresh = tokenResponse.RefreshToken
+		token.AccessExpiry = time.Now().Unix() + int64(tokenResponse.ExpiresIn)
+		err = a.tokenDB.UpdateToken(*token)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Return access token
+	return token.Access, nil
 }
 
 func parseJWTToken(token string) (*Claims, error) {

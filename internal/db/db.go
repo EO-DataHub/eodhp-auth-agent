@@ -20,7 +20,7 @@ type Token struct {
 	Token        string
 	UserID       string
 	Access       string
-	AccessExpiry int
+	AccessExpiry int64
 	Refresh      string
 }
 
@@ -28,13 +28,13 @@ var ErrInvalidToken = errors.New("db: invalid api token")
 var ErrInvalidUser = errors.New("db: invalid user")
 var ErrTokenExpired = errors.New("db: token expired")
 
-type TokenClient struct {
+type TokenDB struct {
 	APITokenPrefix string
 	db             *sql.DB
 	log            *zerolog.Logger
 }
 
-func (t *TokenClient) OpenDB(driver, dataSourceName string) error {
+func (t *TokenDB) OpenDB(driver, dataSourceName string) error {
 	logger := log.With().Str("name", "token client").
 		Str("driver", driver).Str("source", dataSourceName).Logger()
 
@@ -51,7 +51,7 @@ func (t *TokenClient) OpenDB(driver, dataSourceName string) error {
 	return nil
 }
 
-func (t *TokenClient) CloseDB() error {
+func (t *TokenDB) CloseDB() error {
 	if err := t.db.Close(); err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (t *TokenClient) CloseDB() error {
 	return nil
 }
 
-func (t TokenClient) InitDB() error {
+func (t TokenDB) InitDB() error {
 	t.log.Info().Msg("initialising database")
 	var err error
 
@@ -94,11 +94,19 @@ func (t TokenClient) InitDB() error {
 		return err
 	}
 
-	// Create an index on the token column
-	t.log.Debug().Msg("creating token column index")
+	// Create an index on the tokens(token) column
+	t.log.Debug().Msg("creating tokens(token) index")
 	_, err = t.db.Exec(`CREATE INDEX idx_token ON tokens(token)`)
 	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create index on token column")
+		t.log.Error().Err(err).Msg("failed to create tokens(token) index")
+		return err
+	}
+
+	// Create an index on the tokens(user) column
+	t.log.Debug().Msg("creating tokens(user) index")
+	_, err = t.db.Exec(`CREATE INDEX idx_user ON tokens(user)`)
+	if err != nil {
+		t.log.Error().Err(err).Msg("failed to create tokens(user) index")
 		return err
 	}
 
@@ -106,7 +114,7 @@ func (t TokenClient) InitDB() error {
 	return nil
 }
 
-func (t TokenClient) GetUserByID(userID string) (*User, error) {
+func (t TokenDB) GetUserByID(userID string) (*User, error) {
 	t.log.Debug().Msg("getting user")
 
 	user := &User{}
@@ -126,7 +134,7 @@ func (t TokenClient) GetUserByID(userID string) (*User, error) {
 	return user, nil
 }
 
-func (t TokenClient) CreateUser(user User) error {
+func (t TokenDB) CreateUser(user User) error {
 	logger := t.log.With().Str("username", user.Username).Logger()
 	logger.Debug().Msg("creating user")
 
@@ -142,7 +150,7 @@ func (t TokenClient) CreateUser(user User) error {
 	return nil
 }
 
-func (t TokenClient) GetToken(apiToken string) (*Token, error) {
+func (t TokenDB) GetToken(apiToken string) (*Token, error) {
 	t.log.Debug().Msg("getting token by api token")
 
 	token := &Token{}
@@ -164,7 +172,7 @@ func (t TokenClient) GetToken(apiToken string) (*Token, error) {
 	return token, nil
 }
 
-func (t TokenClient) CreateToken(token Token) error {
+func (t TokenDB) CreateToken(token Token) error {
 	t.log.Debug().Msg("creating token")
 
 	_, err := t.db.Exec(
@@ -182,7 +190,23 @@ func (t TokenClient) CreateToken(token Token) error {
 	return nil
 }
 
-func (t TokenClient) GenerateAPIToken() (string, error) {
+func (t TokenDB) UpdateToken(token Token) error {
+	t.log.Debug().Msg("updating token")
+
+	_, err := t.db.Exec(
+		`UPDATE tokens SET access = $1, access_expiry = $2, refresh = $3
+		WHERE token = $4`,
+		token.Access, token.AccessExpiry, token.Refresh, token.Token)
+	if err != nil {
+		t.log.Err(err).Msg("failed to update token")
+		return err
+	}
+
+	t.log.Debug().Msg("token updated")
+	return nil
+}
+
+func (t TokenDB) GenerateAPIToken() (string, error) {
 	tokenBytes := make([]byte, 16)
 	prefixLen := len(t.APITokenPrefix)
 	copy(tokenBytes[0:prefixLen], []byte(t.APITokenPrefix))

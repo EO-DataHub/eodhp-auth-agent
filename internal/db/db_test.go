@@ -11,8 +11,8 @@ import (
 )
 
 // Setup fixture for tests
-func setup() *TokenClient {
-	c := &TokenClient{}
+func setup() *TokenDB {
+	c := &TokenDB{}
 	err := c.OpenDB("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
@@ -25,7 +25,7 @@ func setup() *TokenClient {
 }
 
 // Teardown fixture for tests
-func teardown(c *TokenClient) {
+func teardown(c *TokenDB) {
 	c.CloseDB()
 }
 

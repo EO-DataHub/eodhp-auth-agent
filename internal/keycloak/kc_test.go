@@ -62,7 +62,7 @@ func TestKeycloakClient_RefreshToken_OK(t *testing.T) {
 	assert.NotZero(t, tokenResponse.ExpiresIn, 3600)
 }
 
-func TestKeycloakClient_GetOfflineToken_OK(t *testing.T) {
+func TestGetOfflineToken__OK(t *testing.T) {
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
