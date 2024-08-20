@@ -7,13 +7,22 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
 // Setup fixture for tests
 func setup() *TokenDB {
-	c := &TokenDB{}
-	err := c.OpenDB("sqlite3", ":memory:")
+	logger := log.With().Str("name", "token db").Logger()
+	crypto, err := newCrypto("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+	if err != nil {
+		panic(err)
+	}
+	c := &TokenDB{
+		crypto: crypto,
+		log:    &logger,
+	}
+	err = c.OpenDB("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
 	}

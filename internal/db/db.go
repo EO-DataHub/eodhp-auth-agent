@@ -35,25 +35,41 @@ var ErrInvalidUser = errors.New("db: invalid user")
 var ErrTokenExpired = errors.New("db: token expired")
 
 type TokenDB struct {
-	APITokenPrefix string
-	db             *sql.DB
-	log            *zerolog.Logger
+	APITokenConfig
+	db     *sql.DB
+	crypto *crypto
+	log    *zerolog.Logger
+}
+
+type APITokenConfig struct {
+	Prefix string `yaml:"prefix"`
+	Secret string `yaml:"secret"`
+}
+
+func NewTokenDB(config APITokenConfig) *TokenDB {
+	logger := log.With().Str("name", "token db").Logger()
+	crypto, err := newCrypto(config.Secret)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to create crypto for database")
+		panic(err)
+	}
+	return &TokenDB{
+		APITokenConfig: config,
+		crypto:         crypto,
+		log:            &logger,
+	}
 }
 
 func (t *TokenDB) OpenDB(driver, dataSourceName string) error {
-	logger := log.With().Str("name", "token client").
-		Str("driver", driver).Str("source", dataSourceName).Logger()
-
-	logger.Info().Msg("opening database connection")
+	t.log.Info().Msg("opening database connection")
 
 	var err error
 	t.db, err = sql.Open(driver, dataSourceName)
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to open database connection")
+		t.log.Error().Err(err).Msg("failed to open database connection")
 		return err
 	}
 
-	t.log = &logger
 	return nil
 }
 
@@ -181,18 +197,39 @@ func (t TokenDB) GetTokenByID(id string) (*Token, error) {
 func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	t.log.Debug().Msg("getting token by api token")
 
+	cypherToken, err := t.crypto.encrypt(apiToken)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt api token")
+		return nil, err
+	}
+
 	token := &Token{}
-	err := t.db.QueryRow(
-		`SELECT id, token, user, access, access_expiry, refresh
-		FROM tokens WHERE token = $1`, apiToken).
-		Scan(&token.ID, &token.Token, &token.UserID, &token.Access,
-			&token.AccessExpiry, &token.Refresh)
+	var cypherAccess *string
+	var cypherRefresh *string
+	err = t.db.QueryRow(
+		`SELECT id, user, access, access_expiry, refresh
+		FROM tokens WHERE token = $1`, cypherToken).
+		Scan(&token.ID, &token.UserID, &cypherAccess, &token.AccessExpiry,
+			&cypherRefresh)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Debug().Msg("token not found")
 			return nil, ErrInvalidToken
 		}
 		t.log.Err(err).Msg("failed to get token by api token")
+		return nil, err
+	}
+
+	// Decrypt the sensitive values
+	token.Token = apiToken
+	token.Access, err = t.crypto.decrypt(*cypherAccess)
+	if err != nil {
+		t.log.Err(err).Msg("failed to decrypt access token")
+		return nil, err
+	}
+	token.Refresh, err = t.crypto.decrypt(*cypherRefresh)
+	if err != nil {
+		t.log.Err(err).Msg("failed to decrypt refresh token")
 		return nil, err
 	}
 
@@ -203,12 +240,29 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 func (t TokenDB) CreateToken(token Token) error {
 	t.log.Debug().Msg("creating token")
 
-	_, err := t.db.Exec(
+	// Encrypt the sensitive values
+	cypherToken, err := t.crypto.encrypt(token.Token)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt token")
+		return err
+	}
+	cypherAccess, err := t.crypto.encrypt(token.Access)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt access token")
+		return err
+	}
+	cypherRefresh, err := t.crypto.encrypt(token.Refresh)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt refresh token")
+		return err
+	}
+
+	_, err = t.db.Exec(
 		`INSERT INTO tokens (id, token, user, access, access_expiry, refresh) 
 		VALUES ($1, $2, $3, $4, $5, $6) 
 		RETURNING id, token, user, access, access_expiry, refresh`,
-		token.ID, token.Token, token.UserID, token.Access, token.AccessExpiry,
-		token.Refresh)
+		token.ID, cypherToken, token.UserID, cypherAccess, token.AccessExpiry,
+		cypherRefresh)
 	if err != nil {
 		t.log.Err(err).Msg("failed to create token")
 		return err
@@ -221,10 +275,22 @@ func (t TokenDB) CreateToken(token Token) error {
 func (t TokenDB) UpdateToken(token Token) error {
 	t.log.Debug().Msg("updating token")
 
-	_, err := t.db.Exec(
+	// Encrypt the sensitive values
+	cypherAccess, err := t.crypto.encrypt(token.Access)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt access token")
+		return err
+	}
+	cypherRefresh, err := t.crypto.encrypt(token.Refresh)
+	if err != nil {
+		t.log.Err(err).Msg("failed to encrypt refresh token")
+		return err
+	}
+
+	_, err = t.db.Exec(
 		`UPDATE tokens SET access = $1, access_expiry = $2, refresh = $3
 		WHERE token = $4`,
-		token.Access, token.AccessExpiry, token.Refresh, token.Token)
+		cypherAccess, token.AccessExpiry, cypherRefresh, token.Token)
 	if err != nil {
 		t.log.Err(err).Msg("failed to update token")
 		return err
@@ -234,7 +300,7 @@ func (t TokenDB) UpdateToken(token Token) error {
 	return nil
 }
 
-func (t TokenDB) ListUserTokens(userID string) ([]Token, error) {
+func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 	t.log.Debug().Msg("listing user tokens")
 
 	rows, err := t.db.Query(
@@ -246,13 +312,33 @@ func (t TokenDB) ListUserTokens(userID string) ([]Token, error) {
 	}
 	defer rows.Close()
 
-	var tokens []Token
+	var tokens []*Token
 	for rows.Next() {
-		var token Token
-		err := rows.Scan(&token.ID, &token.Token, &token.UserID, &token.Access,
-			&token.AccessExpiry, &token.Refresh)
+		token := &Token{}
+		var cypherToken *string
+		var cypherAccess *string
+		var cypherRefresh *string
+		err := rows.Scan(&token.ID, &cypherToken, &token.UserID, &cypherAccess,
+			&token.AccessExpiry, &cypherRefresh)
 		if err != nil {
 			t.log.Err(err).Msg("failed to scan token")
+			return nil, err
+		}
+
+		// Decrypt the sensitive values
+		token.Token, err = t.crypto.decrypt(*cypherToken)
+		if err != nil {
+			t.log.Err(err).Msg("failed to decrypt token")
+			return nil, err
+		}
+		token.Access, err = t.crypto.decrypt(*cypherAccess)
+		if err != nil {
+			t.log.Err(err).Msg("failed to decrypt access token")
+			return nil, err
+		}
+		token.Refresh, err = t.crypto.decrypt(*cypherRefresh)
+		if err != nil {
+			t.log.Err(err).Msg("failed to decrypt refresh token")
 			return nil, err
 		}
 		tokens = append(tokens, token)
@@ -278,8 +364,8 @@ func (t TokenDB) DeleteTokenByID(id string) error {
 
 func (t TokenDB) GenerateAPIToken() (string, error) {
 	tokenBytes := make([]byte, 16)
-	prefixLen := len(t.APITokenPrefix)
-	copy(tokenBytes[0:prefixLen], []byte(t.APITokenPrefix))
+	prefixLen := len(t.APITokenConfig.Prefix)
+	copy(tokenBytes[0:prefixLen], []byte(t.APITokenConfig.Prefix))
 	_, err := rand.Read(tokenBytes[prefixLen:])
 	if err != nil {
 		return "", err
