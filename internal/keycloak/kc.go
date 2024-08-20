@@ -11,10 +11,10 @@ import (
 )
 
 type KeycloakClientInputs struct {
-	KeycloakURL  string
-	Realm        string
-	ClientID     string
-	ClientSecret string
+	KeycloakURL  string `yaml:"keycloak_url"`
+	Realm        string `yaml:"realm"`
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
 }
 
 type KeycloakClient struct {

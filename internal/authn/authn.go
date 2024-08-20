@@ -258,8 +258,8 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 		return "", err
 	}
 
-	// Check token access expiry (include buffer for latency)
-	if time.Now().Add(5*time.Second).Unix() >= token.AccessExpiry {
+	// Check token access expiry
+	if token.IsValid() {
 		// Refresh token if access has expired
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {

@@ -11,17 +11,22 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
 )
 
 type mockTokens struct {
-	getToken  *db.Token
-	getErr    error
-	updateErr error
+	getToken     *db.Token
+	getErr       error
+	getCalled    bool
+	updateErr    error
+	updateCalled bool
 }
 
 func (m *mockTokens) GetToken(apiToken string) (*db.Token, error) {
+	m.getCalled = true
+
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -29,10 +34,27 @@ func (m *mockTokens) GetToken(apiToken string) (*db.Token, error) {
 }
 
 func (m *mockTokens) UpdateToken(token db.Token) error {
+	m.updateCalled = true
 	if m.updateErr != nil {
 		return m.updateErr
 	}
 	return nil
+}
+
+type mockAuth struct {
+	refreshToken  *keycloak.TokenResponse
+	refreshErr    error
+	refreshCalled bool
+}
+
+func (m *mockAuth) RefreshToken(refreshToken string) (*keycloak.TokenResponse,
+	error) {
+
+	m.refreshCalled = true
+	if m.refreshErr != nil {
+		return nil, m.refreshErr
+	}
+	return m.refreshToken, nil
 }
 
 func TestCreateAuthRequest_ValidAPIToken_AuthHeaderSet(t *testing.T) {
@@ -63,6 +85,50 @@ func TestCreateAuthRequest_ValidAPIToken_AuthHeaderSet(t *testing.T) {
 
 	_, err = authRequest.Cookie("test-cookie")
 	assert.Error(t, err)
+
+	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
+	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
+}
+
+func TestCreateAuthRequest_ExpiredAPIToken_AuthHeaderSet(t *testing.T) {
+	// Create a new authenticator
+	a := Authenticator{
+		tokenDB: &mockTokens{
+			getToken: &db.Token{
+				ID:           "token-id",
+				Token:        "test-token",
+				UserID:       "user-id",
+				Access:       "expired-token",
+				AccessExpiry: time.Now().Add(-1 * time.Minute).Unix(),
+				Refresh:      "refresh-token",
+			},
+		},
+		auth: &mockAuth{
+			refreshToken: &keycloak.TokenResponse{
+				AccessToken:  "new-access",
+				RefreshToken: "new-refresh",
+				ExpiresIn:    3600,
+			},
+		},
+	}
+
+	// Create a new request with an API token
+	req, err := createRequest(http.MethodGet, "https://test.com")
+	assert.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer A1B2C3D4")
+
+	authRequest, err := a.createAuthRequest(req)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Bearer new-access",
+		authRequest.Header.Get("Authorization"))
+
+	_, err = authRequest.Cookie("test-cookie")
+	assert.Error(t, err)
+
+	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
+	assert.True(t, a.tokenDB.(*mockTokens).updateCalled)
+	assert.True(t, a.auth.(*mockAuth).refreshCalled)
 }
 
 func TestCreateAuthRequest_ValidBearerToken_AuthHeaderSet(t *testing.T) {
@@ -96,8 +162,8 @@ func TestCreateAuthRequest_ValidBearerToken_AuthHeaderSet(t *testing.T) {
 	authRequest, err := a.createAuthRequest(req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, authRequest.Header.Get("Authorization"),
-		fmt.Sprintf("Bearer %s", token))
+	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
+		authRequest.Header.Get("Authorization"))
 
 	_, err = authRequest.Cookie("test-cookie")
 	assert.Error(t, err)
@@ -124,8 +190,8 @@ func TestCreateAuthRequest_ValidSession_AuthHeaderSet(t *testing.T) {
 
 	cookie, err := authRequest.Cookie("test-cookie")
 	assert.NoError(t, err)
-	assert.Equal(t, cookie.Value, "abcdefghi")
-	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
+	assert.Equal(t, "abcdefghi", cookie.Value)
+	assert.Equal(t, "", authRequest.Header.Get("Authorization"))
 }
 
 func TestCreateAuthRequest_NoAuth_NoAuthHeaderSet(t *testing.T) {
@@ -142,7 +208,7 @@ func TestCreateAuthRequest_NoAuth_NoAuthHeaderSet(t *testing.T) {
 
 	authRequest, err := a.createAuthRequest(req)
 	assert.NoError(t, err)
-	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
+	assert.Equal(t, "", authRequest.Header.Get("Authorization"))
 
 	_, err = authRequest.Cookie("test-cookie")
 	assert.Error(t, err)
@@ -166,7 +232,7 @@ func TestCreateAuthRequest_InvalidAPIToken_NoAuthSet(t *testing.T) {
 
 	authRequest, err := a.createAuthRequest(req)
 	assert.NoError(t, err)
-	assert.Equal(t, authRequest.Header.Get("Authorization"), "")
+	assert.Equal(t, "", authRequest.Header.Get("Authorization"))
 
 	_, err = authRequest.Cookie("test-cookie")
 	assert.Error(t, err)
@@ -212,10 +278,10 @@ func TestGetAuthenticatedClaims_ValidAPIToken_Authenticated(t *testing.T) {
 
 	claims, err := a.GetAuthenticatedClaims(req)
 
-	assert.Nil(t, err)
-	assert.Equal(t, claims.Username, "test-user")
-	assert.Equal(t, claims.Subject, "test-subject")
-	assert.Equal(t, claims.RealmAccess.Roles, []string{"test-role"})
+	assert.NoError(t, err)
+	assert.Equal(t, "test-user", claims.Username)
+	assert.Equal(t, "test-subject", claims.Subject)
+	assert.Equal(t, []string{"test-role"}, claims.RealmAccess.Roles)
 }
 
 func TestGetAuthenticatedClaims_NoAuth_Unauthenticated(t *testing.T) {

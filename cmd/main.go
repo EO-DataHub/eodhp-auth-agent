@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/auth"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -31,35 +34,56 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to load config")
 	}
 
+	// Create the database client
+	tokenDB := db.TokenDB{
+		APITokenPrefix: config.ApiTokenPrefix,
+	}
+	tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
+	defer tokenDB.CloseDB()
+
+	// Create the Keycloak client
+	kcClient := keycloak.NewKeycloakClient(config.Keycloak)
+
+	// Create the authenticators
+	authenticators := make([]authn.Authenticator, len(config.Authenticators))
+	for i, a := range config.Authenticators {
+		authenticators[i] = *authn.NewAuthenticator(a, &tokenDB, kcClient)
+	}
+
+	// Create the authorizer
+	authorizer := authz.NewAuthorizer(config.Authorizer)
+
+	// Create routes
+	http.HandleFunc("/auth", withLogger(authHandler(
+		authenticators, authorizer)))
+
 	// Start the server
-	http.HandleFunc("/auth", withLogger(authHandler(*config)))
 	fmt.Printf("Starting server on :%d", port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
 		log.Error().Err(err).Msg("Could not start server")
 	}
 }
 
-func authHandler(c config) func(w http.ResponseWriter, r *http.Request) {
-	// Create the authenticators and authorizer, included in returned closure
-	tokenClient := auth.NewTokenClient()
-	authenticators := make([]auth.Authenticator, len(c.authenticators))
-	for i, a := range c.authenticators {
-		authenticators[i] = *auth.NewAuthenticator(a, tokenClient)
-	}
-	authorizer := auth.NewAuthorizer(c.authorizer)
+func authHandler(authenticators []authn.Authenticator,
+	authorizer authz.Authorizer) func(w http.ResponseWriter, r *http.Request) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Initialise authentication variables
-		var isAuthenticated bool
-		var claims *auth.Claims
+		isAuthenticated := false
+		claims := &authn.Claims{}
 
 		// Loop through the authenticators in order and break on the first
 		// to pass authentication, returning the claims from that authenticator
 		for _, authenticator := range authenticators {
-			isAuthenticated, claims = authenticator.IsAuthenticated(r)
-			if isAuthenticated {
-				break
+			c, err := authenticator.GetAuthenticatedClaims(r)
+			if err != nil {
+				continue
 			}
+
+			// If err is nil, the request is authenticated
+			isAuthenticated = true
+			claims = c
+			break
 		}
 
 		// Use the claims from the authenticated request to check authorization
@@ -90,8 +114,16 @@ func authHandler(c config) func(w http.ResponseWriter, r *http.Request) {
 // list will be checked first. It is suggested to order the authenticators from
 // most to least specific, in terms of allowed origins.
 type config struct {
-	authenticators []auth.AuthenticatorInputs `yaml:"authenticators"`
-	authorizer     auth.AuthorizerInputs      `yaml:"authorizer"`
+	Authenticators []authn.AuthenticatorInputs   `yaml:"authenticators"`
+	Authorizer     authz.AuthorizerInputs        `yaml:"authorizer"`
+	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
+	Database       databaseConfig                `yaml:"database"`
+	ApiTokenPrefix string                        `yaml:"api_token_prefix"`
+}
+
+type databaseConfig struct {
+	Driver string `yaml:"driver"`
+	Source string `yaml:"source"`
 }
 
 func loadConfig(path string) (*config, error) {
@@ -117,7 +149,7 @@ func loadConfig(path string) (*config, error) {
 
 func (c *config) loadConfig(data []byte) error {
 	// Unmarshal the YAML data into the config struct
-	err := yaml.Unmarshal(data, c)
+	err := yaml.Unmarshal(data, &c)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to unmarshal file")
 		return err
@@ -140,6 +172,7 @@ func withLogger(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// Set the log level of the application. Default is warn.
 func setLogLevel(level string) {
 	switch strings.ToLower(level) {
 	case "debug":
@@ -155,6 +188,6 @@ func setLogLevel(level string) {
 	case "panic":
 		zerolog.SetGlobalLevel(zerolog.PanicLevel)
 	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	}
 }

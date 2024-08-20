@@ -109,3 +109,35 @@ func TestGetToken_TokenDoesNotExist(t *testing.T) {
 	_, err = c.GetToken(apiToken)
 	assert.ErrorIs(t, err, ErrInvalidToken)
 }
+
+func TestUpdateToken_Updated(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+
+	// Initialise a token
+	token := Token{
+		ID:           uuid.New().String(),
+		Token:        "testtoken",
+		UserID:       "user-id",
+		Access:       "testaccess",
+		AccessExpiry: 0,
+		Refresh:      "testrefresh",
+	}
+	err := c.CreateToken(token)
+	assert.NoError(t, err)
+
+	token.Access = "newaccess"
+	token.Refresh = "newrefresh"
+	token.AccessExpiry = 3600
+
+	err = c.UpdateToken(token)
+	assert.NoError(t, err)
+
+	// Get the token
+	result, err := c.GetToken(token.Token)
+	assert.NoError(t, err)
+	assert.Equal(t, token.Access, result.Access)
+	assert.Equal(t, token.Refresh, result.Refresh)
+	assert.Equal(t, token.AccessExpiry, result.AccessExpiry)
+}

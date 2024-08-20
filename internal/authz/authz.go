@@ -22,7 +22,7 @@ type opaResponseBody struct {
 }
 
 type AuthorizerInputs struct {
-	OPAClientURL string
+	OPAClientURL string `yaml:"opa_client_url"`
 }
 
 type Authorizer struct {

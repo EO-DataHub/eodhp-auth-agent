@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -22,6 +23,11 @@ type Token struct {
 	Access       string
 	AccessExpiry int64
 	Refresh      string
+}
+
+func (t Token) IsValid() bool {
+	// Include a 5 second buffer to account for any latency
+	return time.Now().Add(5*time.Second).Unix() >= t.AccessExpiry
 }
 
 var ErrInvalidToken = errors.New("db: invalid api token")
