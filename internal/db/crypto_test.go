@@ -26,15 +26,12 @@ func TestCrypto_EncryptThenDecode_OriginalValue(t *testing.T) {
 	assert.Equal(t, originalValue, decryptedValue)
 }
 
-func TestCrypto_EncryptTwice_SameValue(t *testing.T) {
+func TestCrypto_HashTwice_SameValue(t *testing.T) {
 	crypto := setupCrypto()
 
 	value := "test"
-	encryptedValue1, err := crypto.encrypt(value)
-	assert.NoError(t, err)
+	hashValue1 := crypto.hash(value)
+	hashValue2 := crypto.hash(value)
 
-	encryptedValue2, err := crypto.encrypt(value)
-	assert.NoError(t, err)
-
-	assert.Equal(t, encryptedValue1, encryptedValue2)
+	assert.Equal(t, hashValue1, hashValue2)
 }

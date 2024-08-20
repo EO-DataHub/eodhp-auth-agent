@@ -3,14 +3,19 @@ package db
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
+	"hash"
 	"io"
 )
 
 type crypto struct {
 	Key string
 	gcm cipher.AEAD
+	h   hash.Hash
 }
 
 func newCrypto(key string) (*crypto, error) {
@@ -59,4 +64,10 @@ func (c crypto) decrypt(cipherText string) (string, error) {
 	}
 
 	return string(plainText), nil
+}
+
+func (c crypto) hash(plainText string) string {
+	h := hmac.New(sha256.New, []byte(c.Key))
+	h.Write([]byte(plainText))
+	return hex.EncodeToString(h.Sum(nil))
 }

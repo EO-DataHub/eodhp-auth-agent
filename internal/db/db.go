@@ -18,10 +18,10 @@ type User struct {
 
 type Token struct {
 	ID           string `json:"id"`
-	Token        string `json:"token"`
+	Token        string
 	UserID       string `json:"user"`
 	Access       string
-	AccessExpiry int64
+	AccessExpiry int64 `json:"access_expiry"`
 	Refresh      string
 }
 
@@ -197,18 +197,17 @@ func (t TokenDB) GetTokenByID(id string) (*Token, error) {
 func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	t.log.Debug().Msg("getting token by api token")
 
-	cypherToken, err := t.crypto.encrypt(apiToken)
-	if err != nil {
-		t.log.Err(err).Msg("failed to encrypt api token")
-		return nil, err
-	}
+	// Calculate hash of API token
+	hashToken := t.crypto.hash(apiToken)
 
-	token := &Token{}
+	token := &Token{
+		Token: apiToken,
+	}
 	var cypherAccess *string
 	var cypherRefresh *string
-	err = t.db.QueryRow(
+	err := t.db.QueryRow(
 		`SELECT id, user, access, access_expiry, refresh
-		FROM tokens WHERE token = $1`, cypherToken).
+		FROM tokens WHERE token = $1`, hashToken).
 		Scan(&token.ID, &token.UserID, &cypherAccess, &token.AccessExpiry,
 			&cypherRefresh)
 	if err != nil {
@@ -240,12 +239,10 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 func (t TokenDB) CreateToken(token Token) error {
 	t.log.Debug().Msg("creating token")
 
+	// Calculate hash of API token
+	hashToken := t.crypto.hash(token.Token)
+
 	// Encrypt the sensitive values
-	cypherToken, err := t.crypto.encrypt(token.Token)
-	if err != nil {
-		t.log.Err(err).Msg("failed to encrypt token")
-		return err
-	}
 	cypherAccess, err := t.crypto.encrypt(token.Access)
 	if err != nil {
 		t.log.Err(err).Msg("failed to encrypt access token")
@@ -261,7 +258,7 @@ func (t TokenDB) CreateToken(token Token) error {
 		`INSERT INTO tokens (id, token, user, access, access_expiry, refresh) 
 		VALUES ($1, $2, $3, $4, $5, $6) 
 		RETURNING id, token, user, access, access_expiry, refresh`,
-		token.ID, cypherToken, token.UserID, cypherAccess, token.AccessExpiry,
+		token.ID, hashToken, token.UserID, cypherAccess, token.AccessExpiry,
 		cypherRefresh)
 	if err != nil {
 		t.log.Err(err).Msg("failed to create token")
@@ -274,6 +271,9 @@ func (t TokenDB) CreateToken(token Token) error {
 
 func (t TokenDB) UpdateToken(token Token) error {
 	t.log.Debug().Msg("updating token")
+
+	// Calculate hash of API token
+	hashToken := t.crypto.hash(token.Token)
 
 	// Encrypt the sensitive values
 	cypherAccess, err := t.crypto.encrypt(token.Access)
@@ -290,7 +290,7 @@ func (t TokenDB) UpdateToken(token Token) error {
 	_, err = t.db.Exec(
 		`UPDATE tokens SET access = $1, access_expiry = $2, refresh = $3
 		WHERE token = $4`,
-		cypherAccess, token.AccessExpiry, cypherRefresh, token.Token)
+		cypherAccess, token.AccessExpiry, cypherRefresh, hashToken)
 	if err != nil {
 		t.log.Err(err).Msg("failed to update token")
 		return err
@@ -304,7 +304,7 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 	t.log.Debug().Msg("listing user tokens")
 
 	rows, err := t.db.Query(
-		`SELECT id, token, user, access, access_expiry, refresh
+		`SELECT id, user, access_expiry
 		FROM tokens WHERE user = $1`, userID)
 	if err != nil {
 		t.log.Err(err).Msg("failed to list user tokens")
@@ -315,32 +315,12 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 	var tokens []*Token
 	for rows.Next() {
 		token := &Token{}
-		var cypherToken *string
-		var cypherAccess *string
-		var cypherRefresh *string
-		err := rows.Scan(&token.ID, &cypherToken, &token.UserID, &cypherAccess,
-			&token.AccessExpiry, &cypherRefresh)
+		err := rows.Scan(&token.ID, &token.UserID, &token.AccessExpiry)
 		if err != nil {
 			t.log.Err(err).Msg("failed to scan token")
 			return nil, err
 		}
 
-		// Decrypt the sensitive values
-		token.Token, err = t.crypto.decrypt(*cypherToken)
-		if err != nil {
-			t.log.Err(err).Msg("failed to decrypt token")
-			return nil, err
-		}
-		token.Access, err = t.crypto.decrypt(*cypherAccess)
-		if err != nil {
-			t.log.Err(err).Msg("failed to decrypt access token")
-			return nil, err
-		}
-		token.Refresh, err = t.crypto.decrypt(*cypherRefresh)
-		if err != nil {
-			t.log.Err(err).Msg("failed to decrypt refresh token")
-			return nil, err
-		}
 		tokens = append(tokens, token)
 	}
 

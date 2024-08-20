@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	c, err := loadConfig("../example_config.yaml")
+	c, err := loadConfig("../example-config.yaml")
 
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(c.Authenticators))
@@ -33,5 +33,6 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysecret", c.Keycloak.ClientSecret)
 	assert.Equal(t, "sqlite3", c.Database.Driver)
 	assert.Equal(t, "./db.sqlite3", c.Database.Source)
-	assert.Equal(t, "ABCD", c.ApiTokenPrefix)
+	assert.Equal(t, "ABCD", c.APITokenConfig.Prefix)
+	assert.Equal(t, "secret", c.APITokenConfig.Secret)
 }

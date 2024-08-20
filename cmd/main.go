@@ -17,20 +17,27 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	_ "github.com/jackc/pgx"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
+type contextKey string
+
+const claimsKey contextKey = "claims"
+
 func main() {
 	// Parse command line flags
-	logLevel := flag.String("debug", "info", "sets the log level")
+	logLevel := flag.String("log", "warn", "sets the log level")
+	host := flag.String("host", "127.0.0.1", "port to run the server on")
 	port := flag.Int("port", 8080, "port to run the server on")
-	configPath := flag.String("config", "", "path to config file")
+	configPath := flag.String("config", "", "path to config file (required)")
 	flag.Parse()
 
 	// Set the log level
-	setLogLevel(*logLevel)
+	setLogging(*logLevel)
 
 	// Load the config file
 	config, err := loadConfig(*configPath)
@@ -39,9 +46,7 @@ func main() {
 	}
 
 	// Create the database client
-	tokenDB := &db.TokenDB{
-		APITokenPrefix: config.ApiTokenPrefix,
-	}
+	tokenDB := db.NewTokenDB(config.APITokenConfig)
 	tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
 	defer tokenDB.CloseDB()
 
@@ -59,6 +64,8 @@ func main() {
 
 	// Create routes
 	r := mux.NewRouter()
+	r.HandleFunc("/", HomeHandler).Methods(http.MethodGet)
+
 	// The auth route does not use the JWT middleware
 	r.HandleFunc("/auth", withLogger(authHandler(authenticators, authorizer))).
 		Methods(http.MethodGet)
@@ -67,20 +74,25 @@ func main() {
 	var middleware = func(next http.HandlerFunc) http.HandlerFunc {
 		return withLogger(jwtMiddleware(next))
 	}
-	r.HandleFunc("/token", middleware(listTokensHandler(tokenDB))).
+	r.HandleFunc("/tokens", middleware(listTokensHandler(tokenDB))).
 		Methods(http.MethodGet)
-	r.HandleFunc("/token", middleware(createTokenHandler(tokenDB, kcClient))).
+	r.HandleFunc("/tokens", middleware(createTokenHandler(tokenDB, kcClient))).
 		Methods(http.MethodPost)
-	r.HandleFunc("/token/{token_id}", middleware(getTokenHandler(tokenDB))).
+	r.HandleFunc("/tokens/{token_id}", middleware(getTokenHandler(tokenDB))).
 		Methods(http.MethodGet)
-	r.HandleFunc("/token/{token_id}", middleware(deleteTokenHandler(tokenDB))).
+	r.HandleFunc("/tokens/{token_id}", middleware(deleteTokenHandler(tokenDB))).
 		Methods(http.MethodDelete)
 
 	// Start the server
-	fmt.Printf("Starting server on :%d", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+	fmt.Printf("Starting server on %s:%d\n", *host, *port)
+	if err := http.ListenAndServe(fmt.Sprintf("%s:%d", *host, *port), r); err != nil {
 		log.Error().Err(err).Msg("Could not start server")
 	}
+}
+
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Welcome to the auth agent"))
 }
 
 func authHandler(authenticators []authn.Authenticator,
@@ -169,7 +181,7 @@ func jwtMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Add the claims to the context
-		ctx := context.WithValue(r.Context(), "claims", claims)
+		ctx := context.WithValue(r.Context(), claimsKey, *claims)
 		logger.Info().Str("user", claims.Username).Msg("Token verified")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
@@ -181,7 +193,14 @@ func listTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 			Str("handler", "list tokens").Logger()
 
 		// Get the user ID from the claims
-		userID := r.Context().Value("claims").(authn.Claims).Subject
+		claims, ok := r.Context().Value(claimsKey).(authn.Claims)
+		if !ok {
+			logger.Error().Msg("No claims found in context")
+			http.Error(w, "No claims found in context",
+				http.StatusInternalServerError)
+			return
+		}
+		userID := claims.Subject
 		if userID == "" {
 			logger.Error().Msg("No user ID in claims")
 			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
@@ -210,7 +229,7 @@ func createTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			Str("handler", "create token").Logger()
 
 		// Get the user ID from the claims
-		claims := r.Context().Value("claims").(authn.Claims)
+		claims := r.Context().Value(claimsKey).(authn.Claims)
 		if claims.Username == "" {
 			logger.Error().Msg("No user ID in claims")
 			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
@@ -320,7 +339,7 @@ type config struct {
 	Authorizer     authz.AuthorizerInputs        `yaml:"authorizer"`
 	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
 	Database       databaseConfig                `yaml:"database"`
-	ApiTokenPrefix string                        `yaml:"api_token_prefix"`
+	APITokenConfig db.APITokenConfig             `yaml:"api_token"`
 }
 
 type databaseConfig struct {
@@ -374,8 +393,11 @@ func withLogger(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Set the log level of the application. Default is warn.
-func setLogLevel(level string) {
+func setLogging(level string) {
+	zerolog.TimestampFunc = func() time.Time {
+		return time.Now().UTC()
+	}
+
 	switch strings.ToLower(level) {
 	case "debug":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
