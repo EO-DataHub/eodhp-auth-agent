@@ -1,0 +1,23 @@
+# Build the manager binary
+FROM golang:1.22 AS builder
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY cmd/ cmd/
+COPY internal/ internal/
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
+    -o app cmd/main.go
+
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /app/bin
+COPY --from=builder /workspace/app .
+USER 65532:65532
+
+EXPOSE 8080
+ENTRYPOINT ["./app"]
