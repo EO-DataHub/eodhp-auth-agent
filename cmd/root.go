@@ -18,8 +18,6 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/gorilla/mux"
-	_ "github.com/jackc/pgx"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

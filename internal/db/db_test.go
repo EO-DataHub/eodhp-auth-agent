@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
@@ -45,7 +44,6 @@ func TestGetToken_TokenExists(t *testing.T) {
 
 	// Initialise a user
 	userID := uuid.New().String()
-
 
 	// Initialise a token
 	token := Token{

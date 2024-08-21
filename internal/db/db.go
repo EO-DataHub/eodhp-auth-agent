@@ -7,6 +7,8 @@ import (
 	"errors"
 	"time"
 
+	_ "github.com/jackc/pgx"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
