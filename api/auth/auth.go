@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
 	"github.com/rs/zerolog"
 )
 
@@ -12,7 +13,7 @@ type Authenticator interface {
 	GetAuthenticatedClaims(r *http.Request) (*authn.Claims, error)
 }
 type Authorizer interface {
-	IsAuthorized(r *http.Request, claims authn.Claims) (bool, error)
+	IsAuthorized(r *http.Request, body authz.OPARequestBody) (bool, error)
 }
 
 func AuthHandler(authenticators []Authenticator,
@@ -46,7 +47,13 @@ func AuthHandler(authenticators []Authenticator,
 		}
 
 		// Use the claims from the authenticated request to check authorization
-		isAuthorized, err := authorizer.IsAuthorized(r, *claims)
+		isAuthorized, err := authorizer.IsAuthorized(r, authz.OPARequestBody{
+			Input: authz.OPARequestBodyInput{
+				Username: claims.Username,
+				Roles:    claims.RealmAccess.Roles,
+				Path:     r.URL.Path,
+			},
+		})
 		if err != nil {
 			logger.Error().Err(err).Msg("authorization failed")
 			w.WriteHeader(http.StatusInternalServerError)

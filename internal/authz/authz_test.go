@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 )
 
 func TestIsAuthorized_Authorized(t *testing.T) {
@@ -32,12 +30,10 @@ func TestIsAuthorized_Authorized(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	isAuthorized, err := a.IsAuthorized(req, authn.Claims{
-		Username: "test-user",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test-role"},
+	isAuthorized, err := a.IsAuthorized(req, OPARequestBody{
+		Input: OPARequestBodyInput{
+			Username: "test-user",
+			Roles:    []string{"test-role"},
 		},
 	})
 	if err != nil {
@@ -71,12 +67,10 @@ func TestIsAuthorized_Unauthorized(t *testing.T) {
 		t.Fatalf("Failed to create request: %v", err)
 	}
 
-	isAuthorized, err := a.IsAuthorized(req, authn.Claims{
-		Username: "test-user",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test-role"},
+	isAuthorized, err := a.IsAuthorized(req, OPARequestBody{
+		Input: OPARequestBodyInput{
+			Username: "test-user",
+			Roles:    []string{"test-role"},
 		},
 	})
 	if err != nil {

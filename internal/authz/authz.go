@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/rs/zerolog"
 )
 
-type opaRequestBody struct {
-	Input struct {
-		Username string   `json:"username"`
-		Roles    []string `json:"roles"`
-		Path     string   `json:"path"`
-	} `json:"input"`
+type OPARequestBody struct {
+	Input OPARequestBodyInput `json:"input"`
+}
+
+type OPARequestBodyInput struct {
+	Username string   `json:"username"`
+	Roles    []string `json:"roles"`
+	Path     string   `json:"path"`
 }
 
 type opaResponseBody struct {
@@ -37,23 +38,10 @@ func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
 	}
 }
 
-func (a Authorizer) IsAuthorized(r *http.Request, claims authn.Claims) (bool, 
+func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 	error) {
-		
-	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", "OPA").Logger()
 
-	// Create the OPA request body
-	body := opaRequestBody{
-		Input: struct {
-			Username string   `json:"username"`
-			Roles    []string `json:"roles"`
-			Path     string   `json:"path"`
-		}{
-			Username: claims.Username,
-			Roles:    claims.RealmAccess.Roles,
-			Path:     r.URL.Path,
-		},
-	}
+	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", "OPA").Logger()
 
 	// Create the authorization request
 	authRequest, err := a.createAuthRequest(body)
@@ -84,8 +72,8 @@ func (a Authorizer) IsAuthorized(r *http.Request, claims authn.Claims) (bool,
 	return opaResp.Result, nil
 }
 
-func (a Authorizer) createAuthRequest(
-	body opaRequestBody) (*http.Request, error) {
+func (a Authorizer) createAuthRequest(body OPARequestBody) (*http.Request,
+	error) {
 
 	// Convert body variable into io.Reader
 	bodyBytes, err := json.Marshal(body)

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,8 +32,8 @@ type AuthorizerMock struct {
 	called bool
 }
 
-func (a *AuthorizerMock) IsAuthorized(r *http.Request, claims authn.Claims) (
-	bool, error) {
+func (a *AuthorizerMock) IsAuthorized(r *http.Request,
+	body authz.OPARequestBody) (bool, error) {
 
 	a.called = true
 	if a.err != nil {
