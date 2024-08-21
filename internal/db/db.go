@@ -14,11 +14,11 @@ import (
 )
 
 type Token struct {
-	ID           string `json:"id"`
+	ID           string
 	Token        string
-	UserID       string `json:"user"`
+	UserID       string
 	Access       string
-	AccessExpiry int64 `json:"access_expiry"`
+	AccessExpiry int64
 	Refresh      string
 }
 
@@ -89,7 +89,7 @@ func (t TokenDB) InitDB() error {
 		`CREATE TABLE IF NOT EXISTS tokens (
 			id UUID PRIMARY KEY,
 			token TEXT NOT NULL UNIQUE,
-			user UUID NOT NULL,
+			user_id UUID NOT NULL,
 			access TEXT NOT NULL,
 			access_expiry INT NOT NULL,
 			refresh TEXT NOT NULL
@@ -107,11 +107,11 @@ func (t TokenDB) InitDB() error {
 		return err
 	}
 
-	// Create an index on the tokens(user) column
-	t.log.Debug().Msg("creating tokens(user) index")
-	_, err = t.db.Exec(`CREATE INDEX idx_user ON tokens(user)`)
+	// Create an index on the tokens(user_id) column
+	t.log.Debug().Msg("creating tokens(user_id) index")
+	_, err = t.db.Exec(`CREATE INDEX idx_user ON tokens(user_id)`)
 	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create tokens(user) index")
+		t.log.Error().Err(err).Msg("failed to create tokens(user_id) index")
 		return err
 	}
 
@@ -128,7 +128,7 @@ func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
 	}
 	err := t.db.QueryRow(
 		`SELECT access, access_expiry, refresh
-		FROM tokens WHERE id = $1 AND user = $2`, id, userID).
+		FROM tokens WHERE id = $1 AND user_id = $2`, id, userID).
 		Scan(&token.Access, &token.AccessExpiry, &token.Refresh)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -156,7 +156,7 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	var cypherAccess *string
 	var cypherRefresh *string
 	err := t.db.QueryRow(
-		`SELECT id, user, access, access_expiry, refresh
+		`SELECT id, user_id, access, access_expiry, refresh
 		FROM tokens WHERE token = $1`, hashToken).
 		Scan(&token.ID, &token.UserID, &cypherAccess, &token.AccessExpiry,
 			&cypherRefresh)
@@ -205,9 +205,8 @@ func (t TokenDB) CreateToken(token Token) error {
 	}
 
 	_, err = t.db.Exec(
-		`INSERT INTO tokens (id, token, user, access, access_expiry, refresh) 
-		VALUES ($1, $2, $3, $4, $5, $6) 
-		RETURNING id, token, user, access, access_expiry, refresh`,
+		`INSERT INTO tokens (id, token, user_id, access, access_expiry, refresh) 
+		VALUES ($1, $2, $3, $4, $5, $6)`,
 		token.ID, hashToken, token.UserID, cypherAccess, token.AccessExpiry,
 		cypherRefresh)
 	if err != nil {
@@ -239,7 +238,7 @@ func (t TokenDB) UpdateToken(token Token) error {
 
 	_, err = t.db.Exec(
 		`UPDATE tokens SET access = $1, access_expiry = $2, refresh = $3
-		WHERE token = $4 AND user = $5`,
+		WHERE token = $4 AND user_id = $5`,
 		cypherAccess, token.AccessExpiry, cypherRefresh, hashToken,
 		token.UserID)
 	if err != nil {
@@ -262,7 +261,7 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 
 	rows, err := t.db.Query(
 		`SELECT id, access_expiry
-		FROM tokens WHERE user = $1`, userID)
+		FROM tokens WHERE user_id = $1`, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return tokens, nil
@@ -293,7 +292,7 @@ func (t TokenDB) DeleteTokenByID(id, userID string) error {
 	t.log.Debug().Msg("deleting token")
 
 	result, err := t.db.Exec(
-		`DELETE FROM tokens WHERE id = $1 AND user = $2`, id, userID)
+		`DELETE FROM tokens WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		t.log.Err(err).Msg("failed to delete token")
 		return err

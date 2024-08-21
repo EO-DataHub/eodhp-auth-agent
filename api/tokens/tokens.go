@@ -17,7 +17,7 @@ import (
 
 type GetTokenResponse struct {
 	ID     string `json:"id"`
-	UserID string `json:"user"`
+	UserID string `json:"user_id"`
 }
 
 type CreateTokenResponse struct {
