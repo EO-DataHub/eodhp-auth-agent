@@ -45,3 +45,13 @@ go build -a -o dist/auth-agent cmd/main.go
 docker build -t auth-agent .
 docker run -v /absolute/path/to/config.yaml:/app/config.yaml auth-agent --config /app/config.yaml
 ```
+
+## Testing
+
+Unit tests cover most of the key codebase. You can also run coverage tests and view results in html.
+
+```sh
+go test ./... -v  # run unit tests
+go test -coverprofile=coverage.out ./...  # run unit tests and output coverage
+go tool cover -html=coverage.out -o coverage.html  # generate html coverage report
+```
