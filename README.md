@@ -33,6 +33,8 @@ Configuration is controlled via a configuration file. The path to this file must
 
 An example config file is included in this repo as _./example-config.yaml_.
 
+The config file is templated against environment variables when it is loaded. This allows for passing in secret values at runtime. An example is given in _example-config.yaml_ for the postgres database source and the API secret. 
+
 ## Building for Production
 
 ```sh

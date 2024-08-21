@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,4 +36,14 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "./db.sqlite3", c.Database.Source)
 	assert.Equal(t, "ABCD", c.APITokenConfig.Prefix)
 	assert.Equal(t, "secret", c.APITokenConfig.Secret)
+}
+
+func TestLoadEnvVars(t *testing.T) {
+	os.Setenv("VAR1", "value1")
+	os.Setenv("VAR2", "value2")
+
+	envVars := loadEnvVars()
+
+	assert.Equal(t, "value1", envVars["VAR1"])
+	assert.Equal(t, "value2", envVars["VAR2"])
 }

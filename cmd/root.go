@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"strings"
@@ -133,13 +135,26 @@ func loadConfig(path string) (*Config, error) {
 		log.Fatal().Err(err).Msg("Config file not provided")
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
+
+	// Parse the template file
+	tmpl, err := template.ParseFiles(path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to read config file")
-		return nil, err
+		log.Fatal().Err(err).Msg("Error parsing config file template")
 	}
+
+	// Create a map of environment variables
+	envVars := loadEnvVars()
+
+	// Execute the template with the environment variables
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, envVars)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error executing config file template")
+	}
+
+	// Load the config
 	c := &Config{}
-	if err := c.loadConfig(data); err != nil {
+	if err := c.loadConfig(buf.Bytes()); err != nil {
 		log.Fatal().Err(err).Msg("Failed to load config")
 		return nil, err
 	}
@@ -179,4 +194,15 @@ func setLogging(level string) {
 	default:
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	}
+}
+
+func loadEnvVars() map[string]string {
+	envVars := make(map[string]string)
+	for _, env := range os.Environ() {
+		kv := strings.Split(env, "=")
+		if len(kv) == 2 {
+			envVars[kv[0]] = kv[1]
+		}
+	}
+	return envVars
 }
