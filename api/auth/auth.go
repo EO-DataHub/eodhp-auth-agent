@@ -5,12 +5,18 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
 	"github.com/rs/zerolog"
 )
 
-func AuthHandler(authenticators []authn.Authenticator,
-	authorizer authz.Authorizer) func(w http.ResponseWriter, r *http.Request) {
+type Authenticator interface {
+	GetAuthenticatedClaims(r *http.Request) (*authn.Claims, error)
+}
+type Authorizer interface {
+	IsAuthorized(r *http.Request, claims authn.Claims) (bool, error)
+}
+
+func AuthHandler(authenticators []Authenticator,
+	authorizer Authorizer) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().Logger()
@@ -23,7 +29,7 @@ func AuthHandler(authenticators []authn.Authenticator,
 		// to pass authentication, returning the claims from that authenticator
 		for _, authenticator := range authenticators {
 			c, err := authenticator.GetAuthenticatedClaims(r)
-			if err == nil {
+			if err != nil {
 				continue
 			}
 

@@ -81,7 +81,7 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := ListTokensHandler(d)
 
 	// Setup request and response
@@ -132,7 +132,7 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	server, k := setupKeycloakClient(h)
 	defer server.Close()
 
-	// Create view
+	// Create handler
 	handler := CreateTokenHandler(tokenDB, k)
 
 	// Setup request and response
@@ -187,7 +187,7 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := GetTokenHandler(d)
 
 	// Setup request and response
@@ -233,7 +233,7 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := DeleteTokenHandler(d)
 
 	// Setup request and response
@@ -274,7 +274,7 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := ListTokensHandler(d)
 
 	// Setup request and response
@@ -318,7 +318,7 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := GetTokenHandler(d)
 
 	// Setup request and response
@@ -355,7 +355,7 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := DeleteTokenHandler(d)
 
 	// Setup request and response
@@ -392,7 +392,7 @@ func TestGetTokenHandler_NotAuthenticated_Unauthorized(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Create view
+	// Create handler
 	handler := GetTokenHandler(d)
 
 	// Setup request and response with no authentication
