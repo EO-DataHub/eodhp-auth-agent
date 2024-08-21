@@ -101,7 +101,9 @@ func (t TokenDB) InitDB() error {
 
 	// Create an index on the tokens(token) column
 	t.log.Trace().Msg("creating tokens(token) index")
-	_, err = t.db.Exec(`CREATE INDEX idx_token ON tokens(token)`)
+	_, err = t.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_token ON tokens(token)
+	`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create tokens(token) index")
 		return err
@@ -109,7 +111,9 @@ func (t TokenDB) InitDB() error {
 
 	// Create an index on the tokens(user_id) column
 	t.log.Trace().Msg("creating tokens(user_id) index")
-	_, err = t.db.Exec(`CREATE INDEX idx_user ON tokens(user_id)`)
+	_, err = t.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_user ON tokens(user_id)
+	`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create tokens(user_id) index")
 		return err

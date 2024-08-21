@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const OriginalURI string = "X-Original-URI"
+
 type Authenticator interface {
 	GetAuthenticatedClaims(r *http.Request) (*authn.Claims, error)
 }
@@ -20,7 +22,10 @@ func AuthHandler(authenticators []Authenticator,
 	authorizer Authorizer) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger := zerolog.Ctx(r.Context()).With().Logger()
+		originalURI := r.Header.Get(OriginalURI)
+
+		logger := zerolog.Ctx(r.Context()).With().Str("original_uri",
+			originalURI).Logger()
 
 		// Initialise authentication variables
 		isAuthenticated := false
@@ -51,7 +56,7 @@ func AuthHandler(authenticators []Authenticator,
 			Input: authz.OPARequestBodyInput{
 				Username: claims.Username,
 				Roles:    claims.RealmAccess.Roles,
-				Path:     r.URL.Path,
+				Path:     originalURI,
 			},
 		})
 		if err != nil {
