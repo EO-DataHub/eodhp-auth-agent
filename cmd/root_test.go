@@ -8,6 +8,7 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
+	os.Setenv("API_SECRET", "secret")
 	c, err := loadConfig("../example-config.yaml")
 
 	assert.NoError(t, err)
