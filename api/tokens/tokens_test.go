@@ -142,10 +142,10 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 			Subject: userID,
 		},
 	}
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
 	token, err := authn.CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
-	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
+	ctx = context.WithValue(ctx, middleware.ClaimsKey, *claims)
 	w := httptest.NewRecorder()
 
 	// Test the handler

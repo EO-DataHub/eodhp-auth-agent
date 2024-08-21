@@ -3,7 +3,6 @@ package tokens
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
@@ -81,23 +80,8 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			return
 		}
 
-		// Get the Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			logger.Debug().Msg("Authorization header missing")
-			http.Error(w, "Authorization header missing",
-				http.StatusUnauthorized)
-			return
-		}
-
-		// Check the Authorization header format
-		authToken := strings.TrimPrefix(authHeader, "Bearer ")
-		if authToken == authHeader {
-			logger.Error().Msg("Invalid authorization header")
-			http.Error(w, "Invalid authorization header",
-				http.StatusUnauthorized)
-			return
-		}
+		// Get the token from the context
+		authToken := r.Context().Value(middleware.TokenKey).(string)
 
 		// Get the offline token from the Keycloak client
 		resp, err := auth.GetOfflineToken(authToken)
