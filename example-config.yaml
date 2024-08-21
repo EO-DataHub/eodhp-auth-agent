@@ -28,4 +28,6 @@ database:
   source: ./db.sqlite3
   # driver: pgx
   # source: postgres://username:password@localhost:5432/database_name
-api_token_prefix: ABCD
+api_token:
+  prefix: ABCD
+  secret: secret

@@ -72,7 +72,7 @@ func TestGetUserID_UserDoesNotExist(t *testing.T) {
 
 	// Get the user ID
 	_, err = c.GetUserByID(uuid.New().String())
-	assert.ErrorIs(t, err, ErrInvalidUser)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestGetToken_TokenExists(t *testing.T) {
@@ -116,7 +116,7 @@ func TestGetToken_TokenDoesNotExist(t *testing.T) {
 
 	// Get the token
 	_, err = c.GetTokenByAPIToken(apiToken)
-	assert.ErrorIs(t, err, ErrInvalidToken)
+	assert.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestUpdateToken_Updated(t *testing.T) {

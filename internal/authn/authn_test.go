@@ -151,7 +151,7 @@ func TestCreateAuthRequest_ValidBearerToken_AuthHeaderSet(t *testing.T) {
 			Roles: []string{"test-role"},
 		},
 	}
-	token, err := createJWTToken(claims)
+	token, err := CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
 
 	// Create a new request with an bearer token
@@ -221,7 +221,7 @@ func TestCreateAuthRequest_InvalidAPIToken_NoAuthSet(t *testing.T) {
 			CookieName: "test-cookie",
 		},
 		tokenDB: &mockTokens{
-			getErr: db.ErrInvalidToken,
+			getErr: db.ErrNotFound,
 		},
 	}
 
@@ -432,7 +432,7 @@ func setAuthenticatedResponse(w http.ResponseWriter) error {
 			Roles: []string{"test-role"},
 		},
 	}
-	token, err := createJWTToken(claims)
+	token, err := CreateJWTToken(claims, "secret-key")
 	if err != nil {
 		return err
 	}
@@ -440,14 +440,4 @@ func setAuthenticatedResponse(w http.ResponseWriter) error {
 		fmt.Sprintf("Bearer %s", token))
 	w.WriteHeader(http.StatusOK)
 	return nil
-}
-
-func createJWTToken(claims *Claims) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	secret := []byte("your-secret-key")
-	signedToken, err := token.SignedString(secret)
-	if err != nil {
-		return "", err
-	}
-	return signedToken, nil
 }
