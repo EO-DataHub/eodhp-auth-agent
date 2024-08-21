@@ -100,7 +100,7 @@ func (t TokenDB) InitDB() error {
 	}
 
 	// Create an index on the tokens(token) column
-	t.log.Debug().Msg("creating tokens(token) index")
+	t.log.Trace().Msg("creating tokens(token) index")
 	_, err = t.db.Exec(`CREATE INDEX idx_token ON tokens(token)`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create tokens(token) index")
@@ -108,7 +108,7 @@ func (t TokenDB) InitDB() error {
 	}
 
 	// Create an index on the tokens(user_id) column
-	t.log.Debug().Msg("creating tokens(user_id) index")
+	t.log.Trace().Msg("creating tokens(user_id) index")
 	_, err = t.db.Exec(`CREATE INDEX idx_user ON tokens(user_id)`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create tokens(user_id) index")
@@ -120,7 +120,7 @@ func (t TokenDB) InitDB() error {
 }
 
 func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
-	t.log.Debug().Msg("getting token by id")
+	t.log.Trace().Msg("getting token by id")
 
 	token := &Token{
 		ID:     id,
@@ -145,7 +145,7 @@ func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
 }
 
 func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
-	t.log.Debug().Msg("getting token by api token")
+	t.log.Trace().Msg("getting token by api token")
 
 	// Calculate hash of API token
 	hashToken := t.crypto.hash(apiToken)
@@ -187,7 +187,7 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 }
 
 func (t TokenDB) CreateToken(token Token) error {
-	t.log.Debug().Msg("creating token")
+	t.log.Trace().Msg("creating token")
 
 	// Calculate hash of API token
 	hashToken := t.crypto.hash(token.Token)
@@ -219,7 +219,7 @@ func (t TokenDB) CreateToken(token Token) error {
 }
 
 func (t TokenDB) UpdateToken(token Token) error {
-	t.log.Debug().Msg("updating token")
+	t.log.Trace().Msg("updating token")
 
 	// Calculate hash of API token
 	hashToken := t.crypto.hash(token.Token)
@@ -255,7 +255,7 @@ func (t TokenDB) UpdateToken(token Token) error {
 }
 
 func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
-	t.log.Debug().Msg("listing user tokens")
+	t.log.Trace().Msg("listing user tokens")
 
 	var tokens []*Token
 
@@ -289,7 +289,7 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 }
 
 func (t TokenDB) DeleteTokenByID(id, userID string) error {
-	t.log.Debug().Msg("deleting token")
+	t.log.Trace().Msg("deleting token")
 
 	result, err := t.db.Exec(
 		`DELETE FROM tokens WHERE id = $1 AND user_id = $2`, id, userID)
