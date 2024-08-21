@@ -17,15 +17,25 @@ git clone https://github.com/yourusername/eo-datahub-auth-agent.git
 cd eo-datahub-auth-agent
 ```
 
-## Running the Server
+## Usage
+
+### Running the Server
 
 ```sh
-go run cmd/main.go --config config.yaml
+go run main.go --config config.yaml
 ```
 
 The server will start on port 8080.
 
 To view command line options append `--help` to the run command.
+
+### Init DB
+
+Before using a database it is necessay to create the tables. The initdb command can be used for this.
+
+```sh
+go run main.go initdb --config config.yaml
+```
 
 ### Configuration
 
@@ -33,7 +43,7 @@ Configuration is controlled via a configuration file. The path to this file must
 
 An example config file is included in this repo as _./example-config.yaml_.
 
-The config file is templated against environment variables when it is loaded. This allows for passing in secret values at runtime. An example is given in _example-config.yaml_ for the postgres database source and the API secret. 
+The config file is templated against environment variables when it is loaded. This allows for passing in secret values at runtime. An example is given in _example-config.yaml_ for the postgres database source and the API secret.
 
 ## Building for Production
 
