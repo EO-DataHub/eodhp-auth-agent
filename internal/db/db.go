@@ -11,11 +11,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type User struct {
-	ID       string
-	Username string
-}
-
 type Token struct {
 	ID           string `json:"id"`
 	Token        string
@@ -86,18 +81,6 @@ func (t TokenDB) InitDB() error {
 	t.log.Info().Msg("initialising database")
 	var err error
 
-	// Create the user table if it does not exist
-	t.log.Debug().Msg("creating user table")
-	_, err = t.db.Exec(
-		`CREATE TABLE IF NOT EXISTS users (
-			id UUID PRIMARY KEY,
-			username TEXT NOT NULL
-		)`)
-	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create user table")
-		return err
-	}
-
 	// Create the token table if it does not exist
 	t.log.Debug().Msg("creating token table")
 	_, err = t.db.Exec(
@@ -107,8 +90,7 @@ func (t TokenDB) InitDB() error {
 			user UUID NOT NULL,
 			access TEXT NOT NULL,
 			access_expiry INT NOT NULL,
-			refresh TEXT NOT NULL,
-			FOREIGN KEY (user) REFERENCES users (id)
+			refresh TEXT NOT NULL
 		)`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create token table")
@@ -132,42 +114,6 @@ func (t TokenDB) InitDB() error {
 	}
 
 	t.log.Info().Msg("database initialised")
-	return nil
-}
-
-func (t TokenDB) GetUserByID(userID string) (*User, error) {
-	t.log.Debug().Msg("getting user")
-
-	user := &User{}
-	err := t.db.QueryRow(
-		`SELECT id, username FROM users WHERE id = $1`, userID).
-		Scan(&user.ID, &user.Username)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			t.log.Warn().Err(ErrNotFound).Msg("user not found")
-			return nil, ErrNotFound
-		}
-		t.log.Debug().Err(err).Msg("failed to get user by id")
-		return nil, err
-	}
-
-	t.log.Debug().Msg("user found")
-	return user, nil
-}
-
-func (t TokenDB) CreateUser(user User) error {
-	logger := t.log.With().Str("username", user.Username).Logger()
-	logger.Debug().Msg("creating user")
-
-	_, err := t.db.Exec(
-		`INSERT INTO users (id, username) 
-		VALUES ($1, $2)`, user.ID, user.Username)
-	if err != nil {
-		logger.Warn().Err(err).Msg("failed to create user")
-		return err
-	}
-
-	logger.Debug().Msg("user created")
 	return nil
 }
 

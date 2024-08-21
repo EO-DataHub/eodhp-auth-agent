@@ -38,66 +38,25 @@ func teardown(c *TokenDB) {
 	c.CloseDB()
 }
 
-func TestGetUserID_UserExists(t *testing.T) {
-	// Setup fixture
-	c := setup()
-	defer teardown(c)
-
-	// Initialise a user
-	user := User{
-		ID:       uuid.New().String(),
-		Username: "testuser",
-	}
-	err := c.CreateUser(user)
-	assert.NoError(t, err)
-
-	// Get the user ID
-	result, err := c.GetUserByID(user.ID)
-	assert.NoError(t, err)
-	assert.Equal(t, user.ID, result.ID)
-}
-
-func TestGetUserID_UserDoesNotExist(t *testing.T) {
-	// Setup fixture
-	c := setup()
-	defer teardown(c)
-
-	// Initialise another user
-	user := User{
-		ID:       uuid.New().String(),
-		Username: "anotheruser",
-	}
-	err := c.CreateUser(user)
-	assert.NoError(t, err)
-
-	// Get the user ID
-	_, err = c.GetUserByID(uuid.New().String())
-	assert.ErrorIs(t, err, ErrNotFound)
-}
-
 func TestGetToken_TokenExists(t *testing.T) {
 	// Setup fixture
 	c := setup()
 	defer teardown(c)
 
 	// Initialise a user
-	user := User{
-		ID:       uuid.New().String(),
-		Username: "testuser",
-	}
-	err := c.CreateUser(user)
-	assert.NoError(t, err)
+	userID := uuid.New().String()
+
 
 	// Initialise a token
 	token := Token{
 		ID:           uuid.New().String(),
 		Token:        "testtoken",
-		UserID:       user.ID,
+		UserID:       userID,
 		Access:       "testaccess",
 		AccessExpiry: 0,
 		Refresh:      "testrefresh",
 	}
-	err = c.CreateToken(token)
+	err := c.CreateToken(token)
 	assert.NoError(t, err)
 
 	// Get the token
