@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -15,18 +17,17 @@ import (
 )
 
 type AuthenticatorInputs struct {
-	Name       string   `yaml:"name"`
-	AuthURL    string   `yaml:"auth_url"`
-	AuthMethod string   `yaml:"auth_method"`
-	CookieName string   `yaml:"cookie_name"`
-	Domains    []string `yaml:"domains"`
+	Name    string   `yaml:"name"`
+	AuthURL string   `yaml:"auth_url"`
+	Domains []string `yaml:"domains"`
 }
 
 type Authenticator struct {
 	AuthenticatorInputs
-	http    *http.Client
-	tokenDB TokenDB
-	auth    AuthClient
+	proxy        *httputil.ReverseProxy
+	hostPatterns []regexp.Regexp
+	tokenDB      TokenDB
+	auth         AuthClient
 }
 
 type TokenDB interface {
@@ -45,14 +46,24 @@ var ErrMissingAuthResponseClaims = errors.New(
 	"authn: missing auth response claims")
 
 func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
-	auth AuthClient) *Authenticator {
+	auth AuthClient) (*Authenticator, error) {
+
+	url, err := url.Parse(inputs.AuthURL)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"authenticator %s: Could not parse auth url: %w", inputs.Name, err)
+	}
+
+	// Precompile regex patterns for host matching
+	hostPatterns := compileGlobPatterns(inputs.Domains)
 
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
-		http:                &http.Client{},
+		proxy:               httputil.NewSingleHostReverseProxy(url),
+		hostPatterns:        hostPatterns,
 		tokenDB:             tokenDB,
 		auth:                auth,
-	}
+	}, nil
 }
 
 type Claims struct {
@@ -69,115 +80,89 @@ type AuthResponse struct {
 	AuthenticationHeader string
 }
 
-func (a Authenticator) IsAuthenticated(req *http.Request) (
-	bool, *http.Response, error) {
+// Authenticates the request by proxying it to the authentication server and
+// checking the response status code. If the response status code is 2xx, the
+// request is considered authenticated.
+//
+// The response writer is updated with the response from the upstream server and
+// should be used to write the response to the client. The final status code has
+// not been set, and should be with rw.WriteHeader(statusCode) by the calling
+// function.
+func (a Authenticator) IsAuthenticated(rw http.ResponseWriter,
+	req *http.Request) (bool, error) {
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
 
 	// Check the target domain of the request, deny if not allowed
-	if isAllowed, err := a.isHostAllowed(req); err != nil {
-		logger.Error().Err(err).Msg("failed to check domain")
-		return false, nil, err
-	} else if !isAllowed {
+	isHostAllowed := a.isHostAllowed(req.Host)
+	if !isHostAllowed {
 		logger.Debug().Err(ErrInvalidHost).Msg("host not allowed")
-		return false, nil, ErrInvalidHost
+		return false, ErrInvalidHost
 	}
 	logger.Debug().Msg("host allowed")
 
-	authRequest, err := a.createAuthRequest(req)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to create auth request")
-		return false, nil, err
-	}
-	logger.Debug().Msg("authentication request created")
-
-	// Send the authentication request
-	authResp, err := a.http.Do(authRequest)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to send authentication request")
-		return false, nil, err
-	}
-	defer authResp.Body.Close()
-	logger.Debug().Msg("authentication request sent")
-
-	// Check the response status code is outwith the 2xx range
-	if authResp.StatusCode < 200 || authResp.StatusCode >= 300 {
-		logger.Info().
-			Int("status_code", authResp.StatusCode).
-			Msg("authentication request failed")
-		return false, authResp, nil
-	}
-	logger.Info().
-		Int("status_code", authResp.StatusCode).
-		Msg("authentication request succeeded")
-
-	return true, authResp, nil
-}
-
-
-
-func (a Authenticator) isHostAllowed(req *http.Request) (bool, error) {
-	for _, pattern := range a.Domains {
-		// Convert wildcard pattern to regular expression
-		regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
-		regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
-
-		matched, err := regexp.MatchString(regexPattern, req.Host)
+	// Check if the request is using auth-agent API token for authentication
+	if hasAPIToken, token := a.hasAPIToken(req); hasAPIToken {
+		// Exchange API token for JWT token
+		jwtToken, err := a.exchangeAPIToken(token)
 		if err != nil {
-			return false, fmt.Errorf("failed to match host: %w", err)
-		}
-		if matched {
-			return true, nil
+			logger.Error().Err(err).Msg("failed to exchange API token")
+			// Continue as request may be authenticated by other means
+		} else {
+			// Replace API token with JWT token in Authorization header
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
 		}
 	}
 
-	return false, nil
+	// Proxy the response to the authentication server
+	arw := &authenticationResponseWriter{ResponseWriter: rw}
+	a.proxy.ServeHTTP(arw, req)
+
+	// Return the authentication decision. The proxy response is also caputed in
+	// the response writer, which should normally have been passed by reference.
+	return arw.IsAuthenticated, nil
 }
 
-func (a Authenticator) createAuthRequest(req *http.Request) (*http.Request, error) {
-	// Create a new request to the authentication URL
-	authReq, err := http.NewRequest("GET", a.AuthURL, nil)
-	if err != nil {
-		return nil, err
+func (a Authenticator) isHostAllowed(host string) bool {
+	for _, pattern := range a.hostPatterns {
+		matched := pattern.Match([]byte(host))
+		if matched {
+			return true
+		}
 	}
-	// Copy the headers from the original request to the auth request
-	authReq.Header = req.Header
+	return false
+}
 
+// Checks if the request Authorization header contains an API token. If so,
+// returns the token and true, otherwise returns an empty string and false.
+func (a Authenticator) hasAPIToken(req *http.Request) (bool, string) {
 	// Extract Authorization header
 	authHeader := req.Header.Get("Authorization")
 	if authHeader == "" {
 		// No further processing required
-		return authReq, nil
+		return false, ""
 	}
 
 	// Check if Authorization header is Bearer token
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		// No further processing required
-		return authReq, nil
+		return false, ""
 	}
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 
 	// Check if token has API prefix
 	if !a.tokenDB.IsAPIToken(token) {
 		// No further processing required
-		return authReq, nil
+		return false, ""
 	}
 
-	// Exchange API token for JWT token
-	jwtToken, err := a.exchangeAPIToken(token)
-	if err != nil {
-		// Request can still be sent to upstream as may be authenticated by
-		// other means (e.g. session cookie)
-		return authReq, nil
-	}
-
-	// Replace API token with JWT token in Authorization header
-	authReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
-
-	return authReq, nil
+	return true, token
 }
 
+// Exchange API token for JWT access token from the token database. If the
+// access token has expired, it is refreshed using the refresh token and the
+// database is updated with the new access and refresh token.
 func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	// Get token from DB
 	token, err := a.tokenDB.GetTokenByAPIToken(apiToken)
@@ -205,4 +190,22 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 
 	// Return access token
 	return token.Access, nil
+}
+
+// Response writers can only have the status code set once, so we need to
+// wrap the response writer to stop the status code being set in the proxy call.
+//
+// For convenience, we capture whether the response is authenticated from the
+// status code, rather than the status code itself.
+type authenticationResponseWriter struct {
+	http.ResponseWriter
+	IsAuthenticated bool
+}
+
+func (w *authenticationResponseWriter) WriteHeader(statusCode int) {
+	if statusCode >= 200 && statusCode < 300 {
+		w.IsAuthenticated = true
+	} else {
+		w.IsAuthenticated = false
+	}
 }
