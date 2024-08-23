@@ -16,9 +16,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
 
 FROM gcr.io/distroless/static:nonroot
 
-WORKDIR /app/bin
-COPY --from=builder /workspace/app .
+WORKDIR /app
+COPY --from=builder /workspace/app bin/
 USER 65532:65532
 
 EXPOSE 8080
-ENTRYPOINT ["./app", "--host=0.0.0.0", "--port=8080"]
+ENTRYPOINT ["./bin/app", "--host=0.0.0.0", "--port=8080"]

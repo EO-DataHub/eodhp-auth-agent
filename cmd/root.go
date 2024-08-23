@@ -113,7 +113,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "warn",
 		"sets the log level")
-	rootCmd.PersistentFlags().StringVar(&host, "host", "127.0.0.1",
+	rootCmd.PersistentFlags().StringVar(&host, "host", "0.0.0.0",
 		"host to run the server on")
 	rootCmd.PersistentFlags().IntVar(&port, "port", 8080,
 		"port to run the server on")

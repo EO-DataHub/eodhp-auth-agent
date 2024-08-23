@@ -1,6 +1,7 @@
 package authn
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type AuthenticatorInputs struct {
@@ -86,10 +88,9 @@ type AuthResponse struct {
 //
 // The response writer is updated with the response from the upstream server and
 // should be used to write the response to the client. The final status code has
-// not been set, and should be with rw.WriteHeader(statusCode) by the calling
+// not been set, and should be with w.WriteHeader(statusCode) by the calling
 // function.
-func (a Authenticator) IsAuthenticated(rw http.ResponseWriter,
-	req *http.Request) (bool, error) {
+func (a Authenticator) IsAuthenticated(req *http.Request) (bool, error) {
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
@@ -116,12 +117,18 @@ func (a Authenticator) IsAuthenticated(rw http.ResponseWriter,
 	}
 
 	// Proxy the response to the authentication server
-	arw := &authenticationResponseWriter{ResponseWriter: rw}
-	a.proxy.ServeHTTP(arw, req)
+	logger.Info().Msg("proxying request to auth server")
+	w2 := NewAuthRW(w)
+	a.proxy.ServeHTTP(w2, req)
+	logger.Info().Msg("proxy response received")
+
+	for k, v := range w2.Header() {
+		logger.Info().Msgf("auth response header: %s: %s", k, v)
+	}
 
 	// Return the authentication decision. The proxy response is also caputed in
 	// the response writer, which should normally have been passed by reference.
-	return arw.IsAuthenticated, nil
+	return w2.IsAuthenticated(), nil
 }
 
 func (a Authenticator) isHostAllowed(host string) bool {
@@ -192,20 +199,28 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	return token.Access, nil
 }
 
-// Response writers can only have the status code set once, so we need to
-// wrap the response writer to stop the status code being set in the proxy call.
-//
-// For convenience, we capture whether the response is authenticated from the
-// status code, rather than the status code itself.
-type authenticationResponseWriter struct {
+type authRW struct {
 	http.ResponseWriter
-	IsAuthenticated bool
+	statusCode int
+	body       *bytes.Buffer
 }
 
-func (w *authenticationResponseWriter) WriteHeader(statusCode int) {
-	if statusCode >= 200 && statusCode < 300 {
-		w.IsAuthenticated = true
-	} else {
-		w.IsAuthenticated = false
+func NewAuthRW(w http.ResponseWriter) *authRW {
+	return &authRW{
+		ResponseWriter: w,
+		body:           bytes.NewBuffer(nil),
 	}
+}
+
+func (w *authRW) IsAuthenticated() bool {
+	return w.statusCode >= 200 && w.statusCode < 300
+}
+
+func (w *authRW) WriteHeader(statusCode int) {
+	log.Debug().Msgf("auth response status code: %d", statusCode)
+	w.statusCode = statusCode
+}
+
+func (w *authRW) Write(b []byte) (int, error) {
+	return w.body.Write(b)
 }
