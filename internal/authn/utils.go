@@ -22,7 +22,7 @@ func CreateJWTToken(claims Claims, secret string) (string, error) {
 func ParseClaims(token string) (Claims, error) {
 	claims := Claims{}
 	// Check if token is JWT by attempting to parse it
-	if t, err := jwt.ParseWithClaims(token, claims, nil); err != nil {
+	if t, err := jwt.ParseWithClaims(token, &claims, nil); err != nil {
 		// Ignore validation errors (no need to check signing of key)
 		if _, ok := err.(*jwt.ValidationError); !ok {
 			return claims, fmt.Errorf("failed to parse jwt token: %w", err)
