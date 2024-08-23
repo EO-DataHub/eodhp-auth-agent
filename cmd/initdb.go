@@ -24,7 +24,7 @@ var initdbCmd = &cobra.Command{
 		}
 
 		// Create the database client
-		tokenDB := db.NewTokenDB(config.APITokenConfig)
+		tokenDB := db.NewTokenDB(config.APIToken)
 		err = tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to open database")

@@ -35,8 +35,8 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "mysecret", c.Keycloak.ClientSecret)
 	assert.Equal(t, "sqlite3", c.Database.Driver)
 	assert.Equal(t, "./db.sqlite3", c.Database.Source)
-	assert.Equal(t, "ABCD", c.APITokenConfig.Prefix)
-	assert.Equal(t, "secret", c.APITokenConfig.Secret)
+	assert.Equal(t, "ABCD", c.APIToken.Prefix)
+	assert.Equal(t, "secret", c.APIToken.Secret)
 }
 
 func TestLoadEnvVars(t *testing.T) {

@@ -49,7 +49,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Create the database client
-		tokenDB := db.NewTokenDB(config.APITokenConfig)
+		tokenDB := db.NewTokenDB(config.APIToken)
 		err = tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to open database")
@@ -121,7 +121,7 @@ type Config struct {
 	Authorizer     authz.AuthorizerInputs        `yaml:"authorizer"`
 	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
 	Database       databaseConfig                `yaml:"database"`
-	APITokenConfig db.APITokenConfig             `yaml:"api_token"`
+	APIToken       db.TokenDBInputs              `yaml:"api_token"`
 }
 
 type databaseConfig struct {

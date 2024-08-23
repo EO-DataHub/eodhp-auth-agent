@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,6 +40,10 @@ func (m *mockTokens) UpdateToken(token db.Token) error {
 		return m.updateErr
 	}
 	return nil
+}
+
+func (m *mockTokens) IsAPIToken(token string) bool {
+	return strings.HasPrefix(token, "api")
 }
 
 type mockAuth struct {
@@ -75,16 +80,13 @@ func TestCreateAuthRequest_ValidAPIToken_AuthHeaderSet(t *testing.T) {
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
 	assert.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer A1B2C3D4")
+	req.Header.Set("Authorization", "Bearer api-token")
 
 	authRequest, err := a.createAuthRequest(req)
 
 	assert.NoError(t, err)
 	assert.Equal(t, authRequest.Header.Get("Authorization"),
 		"Bearer access-token")
-
-	_, err = authRequest.Cookie("test-cookie")
-	assert.Error(t, err)
 
 	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
@@ -115,7 +117,7 @@ func TestCreateAuthRequest_ExpiredAPIToken_AuthHeaderSet(t *testing.T) {
 	// Create a new request with an API token
 	req, err := createRequest(http.MethodGet, "https://test.com")
 	assert.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer A1B2C3D4")
+	req.Header.Set("Authorization", "Bearer api-token")
 
 	authRequest, err := a.createAuthRequest(req)
 
@@ -137,36 +139,21 @@ func TestCreateAuthRequest_ValidBearerToken_AuthHeaderSet(t *testing.T) {
 		AuthenticatorInputs: AuthenticatorInputs{
 			CookieName: "test-cookie",
 		},
+		tokenDB: &mockTokens{},
 	}
-
-	// Create token
-	claims := &Claims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Hour).Unix(),
-		},
-		Username: "test-user",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test-role"},
-		},
-	}
-	token, err := CreateJWTToken(claims, "secret-key")
-	assert.NoError(t, err)
 
 	// Create a new request with an bearer token
 	req, err := createRequest(http.MethodGet, "https://test.com")
 	assert.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+	req.Header.Set("Authorization", "Bearer access-token")
 
+	// Create auth request
 	authRequest, err := a.createAuthRequest(req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
+	// Check that the Authorization header is set
+	assert.Equal(t, "Bearer access-token",
 		authRequest.Header.Get("Authorization"))
-
-	_, err = authRequest.Cookie("test-cookie")
-	assert.Error(t, err)
 }
 
 func TestCreateAuthRequest_ValidSession_AuthHeaderSet(t *testing.T) {
@@ -209,36 +196,9 @@ func TestCreateAuthRequest_NoAuth_NoAuthHeaderSet(t *testing.T) {
 	authRequest, err := a.createAuthRequest(req)
 	assert.NoError(t, err)
 	assert.Equal(t, "", authRequest.Header.Get("Authorization"))
-
-	_, err = authRequest.Cookie("test-cookie")
-	assert.Error(t, err)
 }
 
-func TestCreateAuthRequest_InvalidAPIToken_NoAuthSet(t *testing.T) {
-	// Create a new authenticator
-	a := Authenticator{
-		AuthenticatorInputs: AuthenticatorInputs{
-			CookieName: "test-cookie",
-		},
-		tokenDB: &mockTokens{
-			getErr: db.ErrNotFound,
-		},
-	}
-
-	// Create a new request with an invalid API token
-	req, err := createRequest(http.MethodGet, "https://test.com")
-	assert.NoError(t, err)
-	req.Header.Set("Authorization", "Token invalid-token")
-
-	authRequest, err := a.createAuthRequest(req)
-	assert.NoError(t, err)
-	assert.Equal(t, "", authRequest.Header.Get("Authorization"))
-
-	_, err = authRequest.Cookie("test-cookie")
-	assert.Error(t, err)
-}
-
-func TestGetAuthenticatedClaims_ValidAPIToken_Authenticated(t *testing.T) {
+func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -276,15 +236,13 @@ func TestGetAuthenticatedClaims_ValidAPIToken_Authenticated(t *testing.T) {
 	req, err := createRequest(http.MethodGet, server.URL)
 	assert.NoError(t, err)
 
-	claims, err := a.GetAuthenticatedClaims(req)
+	authenticated, _, err := a.IsAuthenticated(req)
 
 	assert.NoError(t, err)
-	assert.Equal(t, "test-user", claims.Username)
-	assert.Equal(t, "test-subject", claims.Subject)
-	assert.Equal(t, []string{"test-role"}, claims.RealmAccess.Roles)
+	assert.True(t, authenticated)
 }
 
-func TestGetAuthenticatedClaims_NoAuth_Unauthenticated(t *testing.T) {
+func TestIsAuthenticated_NoAuth_Unauthenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -310,12 +268,12 @@ func TestGetAuthenticatedClaims_NoAuth_Unauthenticated(t *testing.T) {
 	req, err := createRequest(http.MethodGet, server.URL)
 	assert.NoError(t, err)
 
-	claims, err := a.GetAuthenticatedClaims(req)
-	assert.ErrorIs(t, err, ErrAuthFailed)
-	assert.Nil(t, claims)
+	authenticated, _, err := a.IsAuthenticated(req)
+	assert.NoError(t, err)
+	assert.False(t, authenticated)
 }
 
-func TestGetAuthenticatedClaims_UnallowedIsHostAllowed_ReturnErr(t *testing.T) {
+func TestIsAuthenticated_UnallowedIsHostAllowed_ReturnErr(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -338,9 +296,9 @@ func TestGetAuthenticatedClaims_UnallowedIsHostAllowed_ReturnErr(t *testing.T) {
 	req, err := createRequest(http.MethodGet, server.URL)
 	assert.NoError(t, err)
 
-	claims, err := a.GetAuthenticatedClaims(req)
+	authenticated, _, err := a.IsAuthenticated(req)
 	assert.ErrorIs(t, err, ErrInvalidHost)
-	assert.Nil(t, claims)
+	assert.False(t, authenticated)
 }
 
 func TestIsHostAllowed_AllowedSpecific_True(t *testing.T) {
@@ -420,7 +378,7 @@ func createRequest(method, url string) (*http.Request, error) {
 }
 
 func setAuthenticatedResponse(w http.ResponseWriter) error {
-	claims := &Claims{
+	claims := Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject:   "test-subject",
 			ExpiresAt: time.Now().Add(time.Hour).Unix(),

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,19 +12,20 @@ import (
 )
 
 type AuthenticatorMock struct {
-	claims authn.Claims
+	result bool
+	resp   *http.Response
 	err    error
 	called bool
 }
 
-func (a *AuthenticatorMock) GetAuthenticatedClaims(r *http.Request) (
-	*authn.Claims, error) {
+func (a *AuthenticatorMock) IsAuthenticated(r *http.Request) (
+	bool, *http.Response, error) {
 
 	a.called = true
 	if a.err != nil {
-		return nil, a.err
+		return false, nil, a.err
 	}
-	return &a.claims, nil
+	return a.result, a.resp, nil
 }
 
 type AuthorizerMock struct {
@@ -44,9 +46,20 @@ func (a *AuthorizerMock) IsAuthorized(r *http.Request,
 
 func TestAuthHandler_AuthnAndAuthz_OK(t *testing.T) {
 	// Create the mocks
+	jwtToken, err := authn.CreateJWTToken(
+		authn.Claims{Username: "test"}, "secret",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{claims: authn.Claims{}}
+	authenticators[1] = &AuthenticatorMock{result: true, resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
+		},
+	}}
 	authorizer := &AuthorizerMock{result: true}
 
 	// Create the handler
@@ -68,7 +81,7 @@ func TestAuthHandler_NoAuthnButAuthz_OK(t *testing.T) {
 	// Create the mocks
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{err: authn.ErrAuthFailed}
+	authenticators[1] = &AuthenticatorMock{result: false}
 	authorizer := &AuthorizerMock{result: true}
 
 	// Create the handler
@@ -90,7 +103,7 @@ func TestAuthHandler_NoAuthnOrAuthz_Unauthorized(t *testing.T) {
 	// Create the mocks
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{err: authn.ErrAuthFailed}
+	authenticators[1] = &AuthenticatorMock{result: false}
 	authorizer := &AuthorizerMock{result: false}
 
 	// Create the handler
@@ -110,9 +123,20 @@ func TestAuthHandler_NoAuthnOrAuthz_Unauthorized(t *testing.T) {
 
 func TestAuthHandler_AuthnButNoAuthz_Forbidden(t *testing.T) {
 	// Create the mocks
+	jwtToken, err := authn.CreateJWTToken(
+		authn.Claims{Username: "test"}, "secret",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{claims: authn.Claims{}}
+	authenticators[1] = &AuthenticatorMock{result: true, resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
+		},
+	}}
 	authorizer := &AuthorizerMock{result: false}
 
 	// Create the handler
@@ -132,8 +156,19 @@ func TestAuthHandler_AuthnButNoAuthz_Forbidden(t *testing.T) {
 
 func TestAuthHandler_FirstAuthnAndAuthz_OK(t *testing.T) {
 	// Create the mocks
+	jwtToken, err := authn.CreateJWTToken(
+		authn.Claims{Username: "test"}, "secret",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	authenticators := make([]Authenticator, 2)
-	authenticators[0] = &AuthenticatorMock{claims: authn.Claims{}}
+	authenticators[0] = &AuthenticatorMock{result: true, resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
+		},
+	}}
 	authenticators[1] = &AuthenticatorMock{err: authn.ErrInvalidHost}
 	authorizer := &AuthorizerMock{result: true}
 

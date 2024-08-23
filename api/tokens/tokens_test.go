@@ -34,8 +34,9 @@ func setupKeycloakClient(handler http.Handler) (*httptest.Server,
 }
 
 func setupTokenDB() *db.TokenDB {
-	d := db.NewTokenDB(db.APITokenConfig{
+	d := db.NewTokenDB(db.TokenDBInputs{
 		Secret: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		Prefix: "TEST",
 	})
 	err := d.OpenDB("sqlite3", ":memory:")
 	if err != nil {
@@ -137,7 +138,7 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	// Setup request and response
 	r := httptest.NewRequest("POST", "/tokens", nil)
 	userID := "ABCDEFG-12345678"
-	claims := &authn.Claims{
+	claims := authn.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -145,7 +146,7 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	token, err := authn.CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
 	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
-	ctx = context.WithValue(ctx, middleware.ClaimsKey, *claims)
+	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 	w := httptest.NewRecorder()
 
 	// Test the handler

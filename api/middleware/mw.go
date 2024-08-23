@@ -40,7 +40,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Parse the token for JWT claims
-		claims, err := authn.ParseJWTToken(token)
+		claims, err := authn.ParseClaims(token)
 		if err != nil {
 			logger.Error().Err(err).Msg("Invalid token")
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
@@ -49,7 +49,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Add the token and claims to the context
 		ctx := context.WithValue(r.Context(), TokenKey, token)
-		ctx = context.WithValue(ctx, ClaimsKey, *claims)
+		ctx = context.WithValue(ctx, ClaimsKey, claims)
 		logger.Debug().Str("user", claims.Username).Msg("Token verified")
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
@@ -59,6 +59,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 func WithLogger(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := log.With().
+			Str("host", r.Host).
 			Str("method", r.Method).
 			Str("url", r.URL.String()).
 			Str("remote_addr", r.RemoteAddr).

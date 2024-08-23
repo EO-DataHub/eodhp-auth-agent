@@ -12,7 +12,7 @@ import (
 const OriginalURI string = "X-Original-URI"
 
 type Authenticator interface {
-	GetAuthenticatedClaims(r *http.Request) (*authn.Claims, error)
+	IsAuthenticated(r *http.Request) (bool, *http.Response, error)
 }
 type Authorizer interface {
 	IsAuthorized(r *http.Request, body authz.OPARequestBody) (bool, error)
@@ -21,27 +21,35 @@ type Authorizer interface {
 func AuthHandler(authenticators []Authenticator,
 	authorizer Authorizer) http.HandlerFunc {
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		originalURI := r.Header.Get(OriginalURI)
+	return func(w http.ResponseWriter, req *http.Request) {
+		originalURI := req.Header.Get(OriginalURI)
 
-		logger := zerolog.Ctx(r.Context()).With().Str("original_uri",
+		logger := zerolog.Ctx(req.Context()).With().Str("original_uri",
 			originalURI).Logger()
-
-		// Initialise authentication variables
-		isAuthenticated := false
-		claims := &authn.Claims{}
 
 		// Loop through the authenticators in order and break on the first
 		// to pass authentication, returning the claims from that authenticator
+		isAuthenticated := false
+		claims := authn.Claims{}
 		for _, authenticator := range authenticators {
-			c, err := authenticator.GetAuthenticatedClaims(r)
-			if err != nil {
+			authenticated, resp, _ := authenticator.IsAuthenticated(req)
+			if !authenticated {
 				continue
 			}
 
-			// If err is nil, the request is authenticated
 			isAuthenticated = true
-			claims = c
+			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+			for key, values := range resp.Header {
+				for _, value := range values {
+					w.Header().Add(key, value)
+				}
+			}
+			var err error
+			claims, err = authn.ParseClaims(resp.Header.Get("Authorization"))
+			if err != nil {
+				logger.Error().Str("header", "Authorization").Err(err).
+					Msg("failed to parse claims")
+			}
 			break
 		}
 		if isAuthenticated {
@@ -52,7 +60,7 @@ func AuthHandler(authenticators []Authenticator,
 		}
 
 		// Use the claims from the authenticated request to check authorization
-		isAuthorized, err := authorizer.IsAuthorized(r, authz.OPARequestBody{
+		isAuthorized, err := authorizer.IsAuthorized(req, authz.OPARequestBody{
 			Input: authz.OPARequestBodyInput{
 				Username: claims.Username,
 				Roles:    claims.RealmAccess.Roles,

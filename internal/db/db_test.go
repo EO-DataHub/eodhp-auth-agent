@@ -3,6 +3,8 @@
 package db
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"testing"
 
 	"github.com/google/uuid"
@@ -18,8 +20,9 @@ func setup() *TokenDB {
 		panic(err)
 	}
 	c := &TokenDB{
-		crypto: crypto,
-		log:    &logger,
+		crypto:      crypto,
+		prefixBytes: []byte("TEST"),
+		log:         &logger,
 	}
 	err = c.OpenDB("sqlite3", ":memory:")
 	if err != nil {
@@ -106,4 +109,49 @@ func TestUpdateToken_Updated(t *testing.T) {
 	assert.Equal(t, token.Access, result.Access)
 	assert.Equal(t, token.Refresh, result.Refresh)
 	assert.Equal(t, token.AccessExpiry, result.AccessExpiry)
+}
+
+func TestIsAPIToken_Yes(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+
+	// Initialise a token
+	token, err := c.GenerateAPIToken()
+	assert.NoError(t, err)
+
+	// Check if token is an API token
+	result := c.IsAPIToken(token)
+	assert.True(t, result)
+}
+
+func TestIsAPIToken_DifferentPrefix_No(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+
+	// Manually create a token as in TokenDB.CreateToken(), but with another
+	// prefix
+	tokenBytes := make([]byte, 16)
+	copy(tokenBytes[0:4], []byte("DENY"))
+	_, err := rand.Read(tokenBytes[4:])
+	assert.NoError(t, err)
+	token := hex.EncodeToString(tokenBytes)
+
+	// Check if token is an API token
+	result := c.IsAPIToken(token)
+	assert.False(t, result)
+}
+
+func TestIsAPIToken_Invalid_No(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+
+	// Create invalid token
+	token := "stuvyxyz" // not valid hex
+
+	// Check if token is an API token
+	result := c.IsAPIToken(token)
+	assert.False(t, result)
 }
