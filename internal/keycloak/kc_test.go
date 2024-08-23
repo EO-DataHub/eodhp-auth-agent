@@ -57,8 +57,8 @@ func TestKeycloakClient_RefreshToken_OK(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, tokenResponse)
-	assert.Equal(t, tokenResponse.AccessToken, "new_access")
-	assert.NotEmpty(t, tokenResponse.RefreshToken, "new_refresh")
+	assert.Equal(t, tokenResponse.Access, "new_access")
+	assert.NotEmpty(t, tokenResponse.Refresh, "new_refresh")
 	assert.NotZero(t, tokenResponse.ExpiresIn, 3600)
 }
 
@@ -92,7 +92,7 @@ func TestGetOfflineToken__OK(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, offlineToken)
-	assert.Equal(t, offlineToken.AccessToken, "new_access")
-	assert.NotEmpty(t, offlineToken.RefreshToken, "new_refresh")
+	assert.Equal(t, offlineToken.Access, "new_access")
+	assert.NotEmpty(t, offlineToken.Refresh, "new_refresh")
 	assert.NotZero(t, offlineToken.ExpiresIn, 3600)
 }

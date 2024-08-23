@@ -3,15 +3,11 @@
 authenticators:
   - name: example authenticator
     auth_url: https://example.com/auth
-    auth_method: GET
-    cookie_name: cookie_1
     domains:
       - example.com
       - "*.example.com"
   - name: test authenticator
     auth_url: https://test.com/auth
-    auth_method: GET
-    cookie_name: cookie_2
     domains:
       - test.com
       - "*.test.com"

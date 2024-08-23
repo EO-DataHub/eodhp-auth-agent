@@ -115,8 +115,8 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	// Setup auth server response for Keycloak Client
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := &keycloak.TokenResponse{
-			AccessToken:  "test-access-token",
-			RefreshToken: "test-refresh-token",
+			Access:  "test-access-token",
+			Refresh: "test-refresh-token",
 			ExpiresIn:    3600,
 		}
 		w.WriteHeader(http.StatusOK)
