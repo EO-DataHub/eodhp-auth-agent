@@ -35,9 +35,9 @@ func NewKeycloakClient(inputs KeycloakClientInputs) *KeycloakClient {
 }
 
 type TokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
+	Access    string `json:"access_token"`
+	Refresh   string `json:"refresh_token"`
+	ExpiresIn int    `json:"expires_in"`
 }
 
 func (k KeycloakClient) RefreshToken(refreshToken string) (*TokenResponse,

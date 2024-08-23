@@ -171,16 +171,16 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	}
 
 	// Check token access expiry
-	if token.IsValid() {
-		// Refresh token if access has expired
+	if !token.IsValid() {
+		// Token has expired, refresh it
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)
 		}
 
 		// Update DB with new access token
-		token.Access = tokenResponse.AccessToken
-		token.Refresh = tokenResponse.RefreshToken
+		token.Access = tokenResponse.Access
+		token.Refresh = tokenResponse.Refresh
 		token.AccessExpiry = time.Now().Unix() + int64(tokenResponse.ExpiresIn)
 		err = a.tokenDB.UpdateToken(*token)
 		if err != nil {

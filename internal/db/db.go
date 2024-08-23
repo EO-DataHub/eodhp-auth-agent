@@ -25,7 +25,7 @@ type Token struct {
 
 func (t Token) IsValid() bool {
 	// Include a 5 second buffer to account for any latency
-	return time.Now().Add(5*time.Second).Unix() >= t.AccessExpiry
+	return time.Now().Add(5*time.Second).Unix() < t.AccessExpiry
 }
 
 var ErrNotFound = errors.New("db: not found")
