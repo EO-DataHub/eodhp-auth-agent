@@ -60,10 +60,15 @@ var rootCmd = &cobra.Command{
 		kcClient := keycloak.NewKeycloakClient(config.Keycloak)
 
 		// Create the authenticators
-		authenticators := make([]auth.Authenticator,
-			len(config.Authenticators))
+		authenticators := make([]auth.Authenticator, len(config.Authenticators))
 		for i, a := range config.Authenticators {
-			authenticators[i] = *authn.NewAuthenticator(a, tokenDB, kcClient)
+			var err error
+			authenticators[i], err = authn.NewAuthenticator(a, tokenDB,
+				kcClient)
+			if err != nil {
+				log.Fatal().Str("authenticator", a.Name).Err(err).
+					Msg("Failed to create authenticator")
+			}
 		}
 
 		// Create the authorizer

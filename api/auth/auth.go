@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
@@ -12,10 +13,10 @@ import (
 const OriginalURI string = "X-Original-URI"
 
 type Authenticator interface {
-	IsAuthenticated(r *http.Request) (bool, *http.Response, error)
+	IsAuthenticated(w http.ResponseWriter, req *http.Request) (bool, error)
 }
 type Authorizer interface {
-	IsAuthorized(r *http.Request, body authz.OPARequestBody) (bool, error)
+	IsAuthorized(req *http.Request, body authz.OPARequestBody) (bool, error)
 }
 
 func AuthHandler(authenticators []Authenticator,
@@ -30,31 +31,25 @@ func AuthHandler(authenticators []Authenticator,
 		// Loop through the authenticators in order and break on the first
 		// to pass authentication, returning the claims from that authenticator
 		isAuthenticated := false
-		claims := authn.Claims{}
 		for _, authenticator := range authenticators {
-			authenticated, resp, _ := authenticator.IsAuthenticated(req)
-			if !authenticated {
-				continue
+			authenticated, _ := authenticator.IsAuthenticated(w, req)
+			if authenticated {
+				isAuthenticated = true
+				break
 			}
-
-			isAuthenticated = true
-			w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-			for key, values := range resp.Header {
-				for _, value := range values {
-					w.Header().Add(key, value)
-				}
-			}
-			var err error
-			claims, err = authn.ParseClaims(resp.Header.Get("Authorization"))
-			if err != nil {
-				logger.Error().Str("header", "Authorization").Err(err).
-					Msg("failed to parse claims")
-			}
-			break
 		}
+
+		// If the request is authenticated, parse the claims from the
+		// Authorization header
+		claims := authn.Claims{}
 		if isAuthenticated {
-			logger = logger.With().Str("user", claims.Username).Logger()
 			logger.Info().Msg("request authenticated")
+			var err error
+			claims, err = authn.ParseClaims(strings.TrimPrefix(
+				w.Header().Get("Authorization"), "Bearer "))
+			if err != nil {
+				logger.Warn().Err(err).Msg("failed to parse claims")
+			}
 		} else {
 			logger.Info().Msg("request not authenticated")
 		}
@@ -76,7 +71,7 @@ func AuthHandler(authenticators []Authenticator,
 
 		// Handle authentication requests
 		if isAuthorized {
-			logger.Info().Msg("request authorized")
+			logger.Info().Msg("request is authorized")
 			w.WriteHeader(http.StatusOK)
 		} else if !isAuthenticated {
 			logger.Info().Msg("request requires authentication")

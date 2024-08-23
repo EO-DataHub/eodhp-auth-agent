@@ -106,10 +106,10 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			ID:     uuid.New().String(),
 			Token:  apiToken,
 			UserID: claims.Subject,
-			Access: resp.AccessToken,
+			Access: resp.Access,
 			AccessExpiry: time.Now().Add(time.Duration(resp.ExpiresIn) *
 				time.Second).Unix(),
-			Refresh: resp.RefreshToken,
+			Refresh: resp.Refresh,
 		}
 		if err = tokenDB.CreateToken(token); err != nil {
 			logger.Error().Err(err).Msg("Failed to create token")

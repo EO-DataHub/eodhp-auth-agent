@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,19 +12,20 @@ import (
 
 type AuthenticatorMock struct {
 	result bool
-	resp   *http.Response
+	token  string
 	err    error
 	called bool
 }
 
-func (a *AuthenticatorMock) IsAuthenticated(r *http.Request) (
-	bool, *http.Response, error) {
+func (a *AuthenticatorMock) IsAuthenticated(w http.ResponseWriter,
+	r *http.Request) (bool, error) {
 
 	a.called = true
 	if a.err != nil {
-		return false, nil, a.err
+		return false, a.err
 	}
-	return a.result, a.resp, nil
+	w.Header().Set("Authorization", a.token)
+	return a.result, nil
 }
 
 type AuthorizerMock struct {
@@ -54,12 +54,7 @@ func TestAuthHandler_AuthnAndAuthz_OK(t *testing.T) {
 	}
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{result: true, resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header: map[string][]string{
-			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
-		},
-	}}
+	authenticators[1] = &AuthenticatorMock{result: true, token: jwtToken}
 	authorizer := &AuthorizerMock{result: true}
 
 	// Create the handler
@@ -131,12 +126,7 @@ func TestAuthHandler_AuthnButNoAuthz_Forbidden(t *testing.T) {
 	}
 	authenticators := make([]Authenticator, 2)
 	authenticators[0] = &AuthenticatorMock{err: authn.ErrInvalidHost}
-	authenticators[1] = &AuthenticatorMock{result: true, resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header: map[string][]string{
-			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
-		},
-	}}
+	authenticators[1] = &AuthenticatorMock{result: true, token: jwtToken}
 	authorizer := &AuthorizerMock{result: false}
 
 	// Create the handler
@@ -163,12 +153,7 @@ func TestAuthHandler_FirstAuthnAndAuthz_OK(t *testing.T) {
 		t.Fatal(err)
 	}
 	authenticators := make([]Authenticator, 2)
-	authenticators[0] = &AuthenticatorMock{result: true, resp: &http.Response{
-		StatusCode: http.StatusOK,
-		Header: map[string][]string{
-			"Authorization": {fmt.Sprintf("Bearer %s", jwtToken)},
-		},
-	}}
+	authenticators[0] = &AuthenticatorMock{result: true, token: jwtToken}
 	authenticators[1] = &AuthenticatorMock{err: authn.ErrInvalidHost}
 	authorizer := &AuthorizerMock{result: true}
 
