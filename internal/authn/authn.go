@@ -1,12 +1,9 @@
 package authn
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -15,7 +12,6 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type AuthenticatorInputs struct {
@@ -26,7 +22,7 @@ type AuthenticatorInputs struct {
 
 type Authenticator struct {
 	AuthenticatorInputs
-	proxy        *httputil.ReverseProxy
+	http         *http.Client
 	hostPatterns []regexp.Regexp
 	tokenDB      TokenDB
 	auth         AuthClient
@@ -50,19 +46,10 @@ var ErrMissingAuthResponseClaims = errors.New(
 func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 	auth AuthClient) (*Authenticator, error) {
 
-	url, err := url.Parse(inputs.AuthURL)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"authenticator %s: Could not parse auth url: %w", inputs.Name, err)
-	}
-
-	// Precompile regex patterns for host matching
-	hostPatterns := compileGlobPatterns(inputs.Domains)
-
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
-		proxy:               httputil.NewSingleHostReverseProxy(url),
-		hostPatterns:        hostPatterns,
+		http:                &http.Client{},
+		hostPatterns:        compileGlobPatterns(inputs.Domains),
 		tokenDB:             tokenDB,
 		auth:                auth,
 	}, nil
@@ -82,15 +69,8 @@ type AuthResponse struct {
 	AuthenticationHeader string
 }
 
-// Authenticates the request by proxying it to the authentication server and
-// checking the response status code. If the response status code is 2xx, the
-// request is considered authenticated.
-//
-// The response writer is updated with the response from the upstream server and
-// should be used to write the response to the client. The final status code has
-// not been set, and should be with w.WriteHeader(statusCode) by the calling
-// function.
-func (a Authenticator) IsAuthenticated(req *http.Request) (bool, error) {
+func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
+	req *http.Request) (bool, error) {
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
@@ -116,19 +96,30 @@ func (a Authenticator) IsAuthenticated(req *http.Request) (bool, error) {
 		}
 	}
 
-	// Proxy the response to the authentication server
-	logger.Info().Msg("proxying request to auth server")
-	w2 := NewAuthRW(w)
-	a.proxy.ServeHTTP(w2, req)
-	logger.Info().Msg("proxy response received")
-
-	for k, v := range w2.Header() {
-		logger.Info().Msgf("auth response header: %s: %s", k, v)
+	// Send authentication request to the auth server
+	r2, err := http.NewRequest(http.MethodGet, a.AuthURL, nil)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to create auth request")
+		return false, err
+	}
+	r2.Header = req.Header // shallow copy
+	resp, err := a.http.Do(r2)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to send auth request")
+		return false, err
 	}
 
-	// Return the authentication decision. The proxy response is also caputed in
-	// the response writer, which should normally have been passed by reference.
-	return w2.IsAuthenticated(), nil
+	// Check the response status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.Debug().Int("status_code", resp.StatusCode).
+			Msg("auth request failed")
+		return false, nil
+	}
+
+	// Copy authentication response headers to the response writer
+	copyHeader(w.Header(), resp.Header)
+
+	return true, nil
 }
 
 func (a Authenticator) isHostAllowed(host string) bool {
@@ -197,30 +188,4 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 
 	// Return access token
 	return token.Access, nil
-}
-
-type authRW struct {
-	http.ResponseWriter
-	statusCode int
-	body       *bytes.Buffer
-}
-
-func NewAuthRW(w http.ResponseWriter) *authRW {
-	return &authRW{
-		ResponseWriter: w,
-		body:           bytes.NewBuffer(nil),
-	}
-}
-
-func (w *authRW) IsAuthenticated() bool {
-	return w.statusCode >= 200 && w.statusCode < 300
-}
-
-func (w *authRW) WriteHeader(statusCode int) {
-	log.Debug().Msgf("auth response status code: %d", statusCode)
-	w.statusCode = statusCode
-}
-
-func (w *authRW) Write(b []byte) (int, error) {
-	return w.body.Write(b)
 }

@@ -3,6 +3,7 @@ package authn
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
@@ -50,4 +51,12 @@ func compileGlobPatterns(patterns []string) []regexp.Regexp {
 		compiledPatterns[i] = *regexp.MustCompile(regexPattern)
 	}
 	return compiledPatterns
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
 }
