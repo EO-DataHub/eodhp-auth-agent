@@ -10,7 +10,6 @@ import (
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
-	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
 )
 
@@ -19,15 +18,6 @@ type AuthenticatorInputs struct {
 	AuthURL string   `yaml:"auth_url"`
 	Domains []string `yaml:"domains"`
 }
-
-type Authenticator struct {
-	AuthenticatorInputs
-	http         *http.Client
-	hostPatterns []regexp.Regexp
-	tokenDB      TokenDB
-	auth         AuthClient
-}
-
 type TokenDB interface {
 	GetTokenByAPIToken(apiToken string) (*db.Token, error)
 	IsAPIToken(token string) bool
@@ -43,6 +33,14 @@ var ErrInvalidJWT = errors.New("authn: invalid jwt token")
 var ErrMissingAuthResponseClaims = errors.New(
 	"authn: missing auth response claims")
 
+type Authenticator struct {
+	AuthenticatorInputs
+	http         *http.Client
+	hostPatterns []regexp.Regexp
+	tokenDB      TokenDB
+	auth         AuthClient
+}
+
 func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 	auth AuthClient) (*Authenticator, error) {
 
@@ -53,20 +51,6 @@ func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 		tokenDB:             tokenDB,
 		auth:                auth,
 	}, nil
-}
-
-type Claims struct {
-	jwt.StandardClaims
-	Username    string `json:"preferred_username"`
-	RealmAccess struct {
-		Roles []string `json:"roles"`
-	} `json:"realm_access"`
-}
-
-type AuthResponse struct {
-	IsAuthenticated      bool
-	Claims               Claims
-	AuthenticationHeader string
 }
 
 func (a Authenticator) IsAuthenticated(w http.ResponseWriter,

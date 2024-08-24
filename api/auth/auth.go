@@ -49,6 +49,8 @@ func AuthHandler(authenticators []Authenticator,
 				w.Header().Get("Authorization"), "Bearer "))
 			if err != nil {
 				logger.Warn().Err(err).Msg("failed to parse claims")
+			} else {
+				logger.Debug().Interface("claims", claims).Msg("parsed claims")
 			}
 		} else {
 			logger.Info().Msg("request not authenticated")

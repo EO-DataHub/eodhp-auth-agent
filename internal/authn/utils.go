@@ -10,6 +10,14 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
+type Claims struct {
+	jwt.StandardClaims
+	Username    string `json:"preferred_username"`
+	RealmAccess struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
+}
+
 func CreateJWTToken(claims Claims, secret string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	secretBytes := []byte(secret)
