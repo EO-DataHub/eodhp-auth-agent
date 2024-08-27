@@ -32,6 +32,8 @@ var ErrInvalidHost = errors.New("authn: invalid host")
 var ErrMissingAuthResponseClaims = errors.New(
 	"authn: missing auth response claims")
 
+const AuthResponseAccessTokenHeader = "X-Auth-Request-Access-Token"
+
 type Authenticator struct {
 	AuthenticatorInputs
 	http         *http.Client
@@ -103,10 +105,10 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	copyHeader(w.Header(), resp.Header)
 
 	// Parse the claims from the auth response Authorization header
-	logger.Debug().Str("authorization", w.Header().Get("Authorization")).
-		Msg("authorization header") // TODO: remove
+	logger.Debug().Str("authorization", w.Header().
+		Get(AuthResponseAccessTokenHeader)).Msg("authorization header") // TODO: remove
 	claims, err := ParseClaims(strings.TrimPrefix(
-		w.Header().Get("Authorization"), "Bearer "))
+		w.Header().Get(AuthResponseAccessTokenHeader), "Bearer "))
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to parse claims")
 		return true, &claims, err
