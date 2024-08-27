@@ -16,10 +16,10 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 		claims := r.Context().Value(ClaimsKey).(authn.Claims)
 		// Test claims
 		assert.Equal(t, "abcd-1234", claims.Subject)
-		if claims.Subject == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
+		assert.Equal(t, "testuser", claims.Username)
+		assert.Equal(t, 2, len(claims.RealmAccess.Roles))
+		assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
+		assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -35,7 +35,7 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 		RealmAccess: struct {
 			Roles []string `json:"roles"`
 		}{
-			Roles: []string{"testrole"},
+			Roles: []string{"test_role_1", "test_role_2"},
 		},
 	}, "secret")
 	if err != nil {
