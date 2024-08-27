@@ -45,6 +45,8 @@ func AuthHandler(authenticators []Authenticator,
 		if isAuthenticated {
 			logger.Info().Msg("request authenticated")
 			var err error
+			logger.Debug().Str("authorization", w.Header().Get("Authorization")).
+				Msg("authorization header") // TODO: remove
 			claims, err = authn.ParseClaims(strings.TrimPrefix(
 				w.Header().Get("Authorization"), "Bearer "))
 			if err != nil {
