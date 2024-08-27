@@ -103,12 +103,13 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 
 	// Copy authentication response headers to the response writer
 	copyHeader(w.Header(), resp.Header)
+	// Replace ID token with access token in Authorization header
+	w.Header().Set("Authorization", resp.Header.Get(AuthResponseAccessTokenHeader))
+	w.Header().Del(AuthResponseAccessTokenHeader)
 
 	// Parse the claims from the auth response Authorization header
-	logger.Debug().Str("authorization", w.Header().
-		Get(AuthResponseAccessTokenHeader)).Msg("authorization header") // TODO: remove
 	claims, err := ParseClaims(strings.TrimPrefix(
-		w.Header().Get(AuthResponseAccessTokenHeader), "Bearer "))
+		w.Header().Get("Authorization"), "Bearer "))
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to parse claims")
 		return true, &claims, err
