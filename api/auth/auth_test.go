@@ -18,14 +18,15 @@ type AuthenticatorMock struct {
 }
 
 func (a *AuthenticatorMock) IsAuthenticated(w http.ResponseWriter,
-	r *http.Request) (bool, error) {
+	r *http.Request) (bool, *authn.Claims, error) {
 
 	a.called = true
 	if a.err != nil {
-		return false, a.err
+		return false, nil, a.err
 	}
 	w.Header().Set("Authorization", a.token)
-	return a.result, nil
+	claims := &authn.Claims{Username: "test"}
+	return a.result, claims, nil
 }
 
 type AuthorizerMock struct {

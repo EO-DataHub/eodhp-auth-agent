@@ -3,6 +3,7 @@
 package authn
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
+	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,10 +63,26 @@ func (m *mockAuth) RefreshToken(refreshToken string) (*keycloak.TokenResponse,
 }
 
 func TestProxyAuthRequest_ValidBearerToken_Authenticated(t *testing.T) {
+	// Create a valid auth response bearer token
+	token, err := CreateJWTToken(Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: "abcd-1234",
+		},
+		Username: "testuser",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test_role_1", "test_role_2"},
+		},
+	}, "secret")
+	if err != nil {
+		t.Fatalf("Error creating JWT token: %v", err)
+	}
+
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", "Bearer server-token")
+			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
@@ -91,22 +109,43 @@ func TestProxyAuthRequest_ValidBearerToken_Authenticated(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer access-token")
 
 	// Method under test
-	authenticated, err := a.IsAuthenticated(w, req)
+	authenticated, claims, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.NoError(t, err)
 	assert.True(t, authenticated)
-	assert.Equal(t, "Bearer server-token", w.Header().Get("Authorization"))
+	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
+		w.Header().Get("Authorization"))
+	assert.Equal(t, "testuser", claims.Username)
+	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
+	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
+	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
 }
 
 func TestProxyAuthRequest_ValidAPIToken_Authenticated(t *testing.T) {
+	// Create a valid auth response bearer token
+	token, err := CreateJWTToken(Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: "abcd-1234",
+		},
+		Username: "testuser",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test_role_1", "test_role_2"},
+		},
+	}, "secret")
+	if err != nil {
+		t.Fatalf("Error creating JWT token: %v", err)
+	}
+
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", "Bearer server-token")
+			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
@@ -142,22 +181,43 @@ func TestProxyAuthRequest_ValidAPIToken_Authenticated(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer api-token")
 
 	// Method under test
-	authenticated, err := a.IsAuthenticated(w, req)
+	authenticated, claims, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.NoError(t, err)
 	assert.True(t, authenticated)
-	assert.Equal(t, "Bearer server-token", w.Header().Get("Authorization"))
+	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
+		w.Header().Get("Authorization"))
+	assert.Equal(t, "testuser", claims.Username)
+	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
+	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
+	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
 	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
 }
 
 func TestProxyAuthRequest_ExpiredAPIToken_Authenticated(t *testing.T) {
+	// Create a valid auth response bearer token
+	token, err := CreateJWTToken(Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: "abcd-1234",
+		},
+		Username: "testuser",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test_role_1", "test_role_2"},
+		},
+	}, "secret")
+	if err != nil {
+		t.Fatalf("Error creating JWT token: %v", err)
+	}
+
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", "Bearer server-token")
+			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
@@ -199,12 +259,17 @@ func TestProxyAuthRequest_ExpiredAPIToken_Authenticated(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer api-token")
 
 	// Method under test
-	authenticated, err := a.IsAuthenticated(w, req)
+	authenticated, claims, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.NoError(t, err)
 	assert.True(t, authenticated)
-	assert.Equal(t, "Bearer server-token", w.Header().Get("Authorization"))
+	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
+		w.Header().Get("Authorization"))
+	assert.Equal(t, "testuser", claims.Username)
+	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
+	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
+	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
 	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.True(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.True(t, a.auth.(*mockAuth).refreshCalled)
@@ -239,12 +304,13 @@ func TestProxyAuthRequest_NoAuth_Unauthenticated(t *testing.T) {
 	}
 
 	// Method under test
-	authenticated, err := a.IsAuthenticated(w, req)
+	authenticated, claims, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
 	assert.Equal(t, "", w.Header().Get("Authorization"))
+	assert.Nil(t, claims)
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
@@ -267,12 +333,13 @@ func TestProxyAuthRequest_HostNotAllowed_Unauthenticated(t *testing.T) {
 	}
 
 	// Method under test
-	authenticated, err := a.IsAuthenticated(w, req)
+	authenticated, claims, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.ErrorIs(t, ErrInvalidHost, err)
 	assert.False(t, authenticated)
 	assert.Equal(t, "", w.Header().Get("Authorization"))
+	assert.Nil(t, claims)
 }
 
 func TestIsHostAllowed_AllowedSpecific_True(t *testing.T) {

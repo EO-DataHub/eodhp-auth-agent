@@ -29,7 +29,6 @@ type AuthClient interface {
 }
 
 var ErrInvalidHost = errors.New("authn: invalid host")
-var ErrInvalidJWT = errors.New("authn: invalid jwt token")
 var ErrMissingAuthResponseClaims = errors.New(
 	"authn: missing auth response claims")
 
@@ -54,7 +53,7 @@ func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 }
 
 func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
-	req *http.Request) (bool, error) {
+	req *http.Request) (bool, *Claims, error) {
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
@@ -63,7 +62,7 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	isHostAllowed := a.isHostAllowed(req.Host)
 	if !isHostAllowed {
 		logger.Debug().Err(ErrInvalidHost).Msg("host not allowed")
-		return false, ErrInvalidHost
+		return false, nil, ErrInvalidHost
 	}
 	logger.Debug().Msg("host allowed")
 
@@ -84,26 +83,38 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	r2, err := http.NewRequest(http.MethodGet, a.AuthURL, nil)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create auth request")
-		return false, err
+		return false, nil, err
 	}
 	r2.Host, r2.Header = req.Host, req.Header
 	resp, err := a.http.Do(r2)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to send auth request")
-		return false, err
+		return false, nil, err
 	}
 
 	// Check the response status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Debug().Int("status_code", resp.StatusCode).
 			Msg("auth request failed")
-		return false, nil
+		return false, nil, nil
 	}
 
 	// Copy authentication response headers to the response writer
 	copyHeader(w.Header(), resp.Header)
 
-	return true, nil
+	// Parse the claims from the auth response Authorization header
+	logger.Debug().Str("authorization", w.Header().Get("Authorization")).
+		Msg("authorization header") // TODO: remove
+	claims, err := ParseClaims(strings.TrimPrefix(
+		w.Header().Get("Authorization"), "Bearer "))
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to parse claims")
+		return true, &claims, err
+	} else {
+		logger.Debug().Interface("claims", claims).Msg("parsed claims")
+	}
+
+	return true, &claims, nil
 }
 
 func (a Authenticator) isHostAllowed(host string) bool {
