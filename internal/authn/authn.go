@@ -101,11 +101,11 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 		return false, nil, nil
 	}
 
-	// Copy authentication response headers to the response writer
-	copyHeader(w.Header(), resp.Header)
-	// Replace ID token with access token in Authorization header
-	w.Header().Set("Authorization", resp.Header.Get(AuthResponseAccessTokenHeader))
-	w.Header().Del(AuthResponseAccessTokenHeader)
+	// Set writer Authorization and Set-Cookie headers from the auth response
+	respHeaders := w.Header()
+	respHeaders.Set("Authorization", fmt.Sprintf("Bearer %s", resp.Header.Get(
+		AuthResponseAccessTokenHeader)))
+	respHeaders.Set("Set-Cookie", resp.Header.Get("Set-Cookie"))
 
 	// Parse the claims from the auth response Authorization header
 	claims, err := ParseClaims(strings.TrimPrefix(
