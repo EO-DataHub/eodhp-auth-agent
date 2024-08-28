@@ -117,8 +117,8 @@ func init() {
 		"host to run the server on")
 	rootCmd.PersistentFlags().IntVar(&port, "port", 8080,
 		"port to run the server on")
-	rootCmd.PersistentFlags().StringVar(&configPath, "config", "",
-		"path to config file (required)")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config",
+		"/etc/auth-agent/config.yaml", "path to config file")
 }
 
 type Config struct {
