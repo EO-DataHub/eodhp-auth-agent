@@ -83,6 +83,8 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		// Get the token from the context
 		authToken := r.Context().Value(middleware.TokenKey).(string)
 
+		logger.Debug().Str("auth_token", authToken).Msg("Got auth token")
+
 		// Get the offline token from the Keycloak client
 		resp, err := auth.GetOfflineToken(authToken)
 		if err != nil {

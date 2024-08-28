@@ -70,14 +70,15 @@ func (k KeycloakClient) RefreshToken(refreshToken string) (*TokenResponse,
 	return &tokenResponse, nil
 }
 
-func (k KeycloakClient) GetOfflineToken(user_token string) (*TokenResponse,
+func (k KeycloakClient) GetOfflineToken(accessToken string) (*TokenResponse,
 	error) {
 
 	data := url.Values{}
 	data.Set("client_id", k.ClientID)
 	data.Set("client_secret", k.ClientSecret)
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
-	data.Set("subject_token", user_token)
+	data.Set("subject_token", accessToken)
+	data.Set("scope", "offline_access")
 
 	resp, err := k.http.PostForm(
 		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token",
