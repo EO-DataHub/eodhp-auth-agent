@@ -21,4 +21,4 @@ USER 65532:65532
 
 EXPOSE 8080
 ENTRYPOINT ["app"]
-CMD ["--host=0.0.0.0", "--port=8080"]
+CMD ["runserver", "--host=0.0.0.0", "--port=8080"]
