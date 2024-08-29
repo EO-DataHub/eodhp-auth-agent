@@ -20,7 +20,7 @@ type AuthFlowInputs struct {
 
 type Authenticator interface {
 	IsAuthenticated(w http.ResponseWriter, req *http.Request) (bool,
-		*authn.Claims, error)
+		authn.Claims, error)
 }
 type Authorizer interface {
 	IsAuthorized(req *http.Request, body authz.OPARequestBody) (bool, error)

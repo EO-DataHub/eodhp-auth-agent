@@ -51,7 +51,7 @@ func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 }
 
 func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
-	req *http.Request) (bool, *Claims, error) {
+	req *http.Request) (bool, Claims, error) {
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
@@ -73,20 +73,20 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	r2, err := http.NewRequest(http.MethodGet, a.AuthURL, nil)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create auth request")
-		return false, nil, err
+		return false, Claims{}, err
 	}
 	r2.Host, r2.Header = req.Host, req.Header
 	resp, err := a.http.Do(r2)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to send auth request")
-		return false, nil, err
+		return false, Claims{}, err
 	}
 
 	// Check the response status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		logger.Debug().Int("status_code", resp.StatusCode).
 			Msg("auth request failed")
-		return false, nil, nil
+		return false, Claims{}, nil
 	}
 
 	// Set writer Authorization and Set-Cookie headers from the auth response
@@ -100,12 +100,12 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 		w.Header().Get("Authorization"), "Bearer "))
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to parse claims")
-		return true, &claims, err
+		return true, claims, err
 	} else {
 		logger.Debug().Interface("claims", claims).Msg("parsed claims")
 	}
 
-	return true, &claims, nil
+	return true, claims, nil
 }
 
 // Checks if the request Authorization header contains an API token. If so,

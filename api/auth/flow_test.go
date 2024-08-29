@@ -17,13 +17,13 @@ type AuthenticatorMock struct {
 }
 
 func (a *AuthenticatorMock) IsAuthenticated(w http.ResponseWriter,
-	r *http.Request) (bool, *authn.Claims, error) {
+	r *http.Request) (bool, authn.Claims, error) {
 
 	a.called = true
 	if a.err != nil {
-		return false, nil, a.err
+		return false, authn.Claims{}, a.err
 	}
-	claims := &authn.Claims{Username: "test"}
+	claims := authn.Claims{Username: "test"}
 	return a.result, claims, nil
 }
 
