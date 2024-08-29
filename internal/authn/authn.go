@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 	"time"
 
@@ -14,9 +13,8 @@ import (
 )
 
 type AuthenticatorInputs struct {
-	Name    string   `yaml:"name"`
-	AuthURL string   `yaml:"auth_url"`
-	Domains []string `yaml:"domains"`
+	Name    string `yaml:"name"`
+	AuthURL string `yaml:"auth_url"`
 }
 type TokenDB interface {
 	GetTokenByAPIToken(apiToken string) (*db.Token, error)
@@ -36,10 +34,9 @@ const AuthResponseAccessTokenHeader = "X-Auth-Request-Access-Token"
 
 type Authenticator struct {
 	AuthenticatorInputs
-	http         *http.Client
-	hostPatterns []regexp.Regexp
-	tokenDB      TokenDB
-	auth         AuthClient
+	http    *http.Client
+	tokenDB TokenDB
+	auth    AuthClient
 }
 
 func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
@@ -48,7 +45,6 @@ func NewAuthenticator(inputs AuthenticatorInputs, tokenDB TokenDB,
 	return &Authenticator{
 		AuthenticatorInputs: inputs,
 		http:                &http.Client{},
-		hostPatterns:        compileGlobPatterns(inputs.Domains),
 		tokenDB:             tokenDB,
 		auth:                auth,
 	}, nil
@@ -59,14 +55,6 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 
 	logger := zerolog.Ctx(req.Context()).With().
 		Str("authenticator", a.Name).Logger()
-
-	// Check the target domain of the request, deny if not allowed
-	isHostAllowed := a.isHostAllowed(req.Host)
-	if !isHostAllowed {
-		logger.Debug().Err(ErrInvalidHost).Msg("host not allowed")
-		return false, nil, ErrInvalidHost
-	}
-	logger.Debug().Msg("host allowed")
 
 	// Check if the request is using auth-agent API token for authentication
 	if hasAPIToken, token := a.hasAPIToken(req); hasAPIToken {
@@ -118,16 +106,6 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	}
 
 	return true, &claims, nil
-}
-
-func (a Authenticator) isHostAllowed(host string) bool {
-	for _, pattern := range a.hostPatterns {
-		matched := pattern.Match([]byte(host))
-		if matched {
-			return true
-		}
-	}
-	return false
 }
 
 // Checks if the request Authorization header contains an API token. If so,

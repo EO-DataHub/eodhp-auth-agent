@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +61,7 @@ func (m *mockAuth) RefreshToken(refreshToken string) (*keycloak.TokenResponse,
 	return m.refreshToken, nil
 }
 
-func TestProxyAuthRequest_ValidBearerToken_Authenticated(t *testing.T) {
+func TestIsAuthenticated_ValidBearerToken_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
 		StandardClaims: jwt.StandardClaims{
@@ -82,19 +81,14 @@ func TestProxyAuthRequest_ValidBearerToken_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
+			w.Header().Set(AuthResponseAccessTokenHeader, token)
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
 
 	// Create a new authenticator
-	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
 	a, err := NewAuthenticator(AuthenticatorInputs{
 		AuthURL: server.URL,
-		Domains: []string{parsedURL.Host},
 	}, &mockTokens{}, &mockAuth{})
 	if err != nil {
 		t.Fatalf("Error creating authenticator: %v", err)
@@ -125,7 +119,7 @@ func TestProxyAuthRequest_ValidBearerToken_Authenticated(t *testing.T) {
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
 }
 
-func TestProxyAuthRequest_ValidAPIToken_Authenticated(t *testing.T) {
+func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
 		StandardClaims: jwt.StandardClaims{
@@ -145,19 +139,14 @@ func TestProxyAuthRequest_ValidAPIToken_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
+			w.Header().Set(AuthResponseAccessTokenHeader, token)
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
 
 	// Create a new authenticator
-	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
 	a, err := NewAuthenticator(AuthenticatorInputs{
 		AuthURL: server.URL,
-		Domains: []string{parsedURL.Host},
 	}, &mockTokens{
 		getToken: &db.Token{
 			ID:           "token-id",
@@ -197,7 +186,7 @@ func TestProxyAuthRequest_ValidAPIToken_Authenticated(t *testing.T) {
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
 }
 
-func TestProxyAuthRequest_ExpiredAPIToken_Authenticated(t *testing.T) {
+func TestIsAuthenticated_ExpiredAPIToken_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
 		StandardClaims: jwt.StandardClaims{
@@ -217,19 +206,14 @@ func TestProxyAuthRequest_ExpiredAPIToken_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Authorization", fmt.Sprintf("Bearer %s", token))
+			w.Header().Set(AuthResponseAccessTokenHeader, token)
 			w.WriteHeader(http.StatusOK)
 		}))
 	defer server.Close()
 
 	// Create a new authenticator
-	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
 	a, err := NewAuthenticator(AuthenticatorInputs{
 		AuthURL: server.URL,
-		Domains: []string{parsedURL.Host},
 	}, &mockTokens{
 		getToken: &db.Token{
 			ID:           "token-id",
@@ -275,7 +259,7 @@ func TestProxyAuthRequest_ExpiredAPIToken_Authenticated(t *testing.T) {
 	assert.True(t, a.auth.(*mockAuth).refreshCalled)
 }
 
-func TestProxyAuthRequest_NoAuth_Unauthenticated(t *testing.T) {
+func TestIsAuthenticated_NoAuth_Unauthenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -284,13 +268,8 @@ func TestProxyAuthRequest_NoAuth_Unauthenticated(t *testing.T) {
 	defer server.Close()
 
 	// Create a new authenticator
-	parsedURL, err := url.Parse(server.URL)
-	if err != nil {
-		t.Fatalf("Error parsing URL: %v", err)
-	}
 	a, err := NewAuthenticator(AuthenticatorInputs{
 		AuthURL: server.URL,
-		Domains: []string{parsedURL.Host},
 	}, &mockTokens{}, &mockAuth{})
 	if err != nil {
 		t.Fatalf("Error creating authenticator: %v", err)
@@ -314,82 +293,4 @@ func TestProxyAuthRequest_NoAuth_Unauthenticated(t *testing.T) {
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
-}
-
-func TestProxyAuthRequest_HostNotAllowed_Unauthenticated(t *testing.T) {
-	// Create a new authenticator
-	a, err := NewAuthenticator(AuthenticatorInputs{
-		Domains: []string{"test.com", "*.test.com"},
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("Error creating authenticator: %v", err)
-	}
-
-	// Create a new request with an no authorization
-	w := httptest.NewRecorder()
-	req, err := http.NewRequest(http.MethodGet, "example.com", nil)
-	if err != nil {
-		t.Fatal("Error creating request: %w", err)
-	}
-
-	// Method under test
-	authenticated, claims, err := a.IsAuthenticated(w, req)
-
-	// Check result
-	assert.ErrorIs(t, ErrInvalidHost, err)
-	assert.False(t, authenticated)
-	assert.Equal(t, "", w.Header().Get("Authorization"))
-	assert.Nil(t, claims)
-}
-
-func TestIsHostAllowed_AllowedSpecific_True(t *testing.T) {
-	// Create a new authenticator
-	a, err := NewAuthenticator(AuthenticatorInputs{
-		Domains: []string{"test.com", "*.test.com"},
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("Error creating authenticator: %v", err)
-	}
-
-	isAllowed := a.isHostAllowed("test.com")
-	assert.True(t, isAllowed)
-}
-
-func TestIsHostAllowed_AllowedWildcard_True(t *testing.T) {
-	// Create a new authenticator
-	a, err := NewAuthenticator(AuthenticatorInputs{
-		Domains: []string{"*"},
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("Error creating authenticator: %v", err)
-	}
-
-	isAllowed := a.isHostAllowed("test.com")
-	assert.True(t, isAllowed)
-}
-
-func TestIsHostAllowed_NotAllowed_False(t *testing.T) {
-	// Create a new authenticator
-	a, err := NewAuthenticator(AuthenticatorInputs{
-		Domains: []string{"test.com", "*.test.com"},
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("Error creating authenticator: %v", err)
-	}
-
-	isAllowed := a.isHostAllowed("example.com")
-	assert.False(t, isAllowed)
-}
-
-func TestIsHostAllowed_HostAllowedPartialWildcard_True(t *testing.T) {
-	// Create a new authenticator
-	a, err := NewAuthenticator(AuthenticatorInputs{
-		Domains: []string{"test.com", "*.test.com"},
-	}, nil, nil)
-	if err != nil {
-		t.Fatalf("Error creating authenticator: %v", err)
-	}
-
-	isAllowed := a.isHostAllowed("sub.test.com")
-	assert.True(t, isAllowed)
 }

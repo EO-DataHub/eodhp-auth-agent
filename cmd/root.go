@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
+	"github.com/EO-DataHub/eodhp-auth-agent/api/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/rs/zerolog"
@@ -69,11 +68,10 @@ func setUp() *db.TokenDB {
 }
 
 type Config struct {
-	Authenticators []authn.AuthenticatorInputs   `yaml:"authenticators"`
-	Authorizer     authz.AuthorizerInputs        `yaml:"authorizer"`
-	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
-	Database       databaseConfig                `yaml:"database"`
-	APIToken       db.TokenDBInputs              `yaml:"api_token"`
+	AuthFlows []auth.AuthFlowInputs         `yaml:"flows"`
+	Keycloak  keycloak.KeycloakClientInputs `yaml:"keycloak"`
+	Database  databaseConfig                `yaml:"database"`
+	APIToken  db.TokenDBInputs              `yaml:"api_token"`
 }
 
 type databaseConfig struct {

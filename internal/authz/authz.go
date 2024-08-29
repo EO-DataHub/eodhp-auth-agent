@@ -23,6 +23,7 @@ type opaResponseBody struct {
 }
 
 type AuthorizerInputs struct {
+	Name         string `yaml:"name"`
 	OPAClientURL string `yaml:"opa_client_url"`
 }
 
@@ -31,8 +32,8 @@ type Authorizer struct {
 	http *http.Client
 }
 
-func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
-	return Authorizer{
+func NewAuthorizer(inputs AuthorizerInputs) *Authorizer {
+	return &Authorizer{
 		AuthorizerInputs: inputs,
 		http:             &http.Client{},
 	}
@@ -41,7 +42,7 @@ func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
 func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 	error) {
 
-	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", "OPA").Logger()
+	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", a.Name).Logger()
 
 	// Create the authorization request
 	authRequest, err := a.createAuthRequest(body)
