@@ -1,6 +1,10 @@
 # Auth Agent
 
-## v0.1.0 (Unreleased)
+## v0.2.0 (Unreleased)
+
+- Tied authenticators and authorizers together in "flows" per domain
+
+## v0.1.0 (29-08-2024)
 
 - Created Cobra CLI
   - Root command runs API server
