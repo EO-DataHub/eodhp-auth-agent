@@ -49,7 +49,7 @@ func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 		logger.Error().Err(err).Msg("failed to create authorization request")
 		return false, err
 	}
-	logger.Debug().Msg("authentication request created")
+	logger.Debug().Msg("authorization request created")
 
 	// Send the authorization request
 	resp, err := a.http.Do(authRequest)

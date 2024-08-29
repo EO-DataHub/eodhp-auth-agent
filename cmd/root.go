@@ -5,19 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/api/auth"
-	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
-	"github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
-	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -37,66 +32,6 @@ var rootCmd = &cobra.Command{
 	Short: "Auth Agent",
 	Long: `Auth Agent is a CLI tool for managing platform authentication 
 		and authorization.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Set the log level
-		setLogging(logLevel)
-
-		// Load the config file
-		var err error
-		config, err = loadConfig(configPath)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to load config")
-		}
-
-		// Create the database client
-		tokenDB := db.NewTokenDB(config.APITokenConfig)
-		err = tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to open database")
-		}
-		defer tokenDB.CloseDB()
-
-		// Create the Keycloak client
-		kcClient := keycloak.NewKeycloakClient(config.Keycloak)
-
-		// Create the authenticators
-		authenticators := make([]auth.Authenticator,
-			len(config.Authenticators))
-		for i, a := range config.Authenticators {
-			authenticators[i] = *authn.NewAuthenticator(a, tokenDB, kcClient)
-		}
-
-		// Create the authorizer
-		authorizer := authz.NewAuthorizer(config.Authorizer)
-
-		// Create routes
-		r := mux.NewRouter()
-
-		// The auth route does not use the JWT middleware
-		r.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(
-			authenticators, authorizer))).Methods(http.MethodGet)
-
-		// The CRUD routes all use the same middleware
-		var middleware = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.WithLogger(middleware.JWTMiddleware(next))
-		}
-		r.HandleFunc("/tokens", middleware(tokens.ListTokensHandler(tokenDB))).
-			Methods(http.MethodGet)
-		r.HandleFunc("/tokens", middleware(tokens.CreateTokenHandler(tokenDB,
-			kcClient))).Methods(http.MethodPost)
-		r.HandleFunc("/tokens/{token_id}", middleware(tokens.GetTokenHandler(
-			tokenDB))).Methods(http.MethodGet)
-		r.HandleFunc("/tokens/{token_id}", middleware(tokens.DeleteTokenHandler(
-			tokenDB))).Methods(http.MethodDelete)
-
-		// Start the server
-		fmt.Printf("Starting server on %s:%d\n", host, port)
-		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
-			r); err != nil {
-
-			log.Error().Err(err).Msg("Could not start server")
-		}
-	},
 }
 
 func Execute() {
@@ -108,12 +43,29 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "warn",
 		"sets the log level")
-	rootCmd.PersistentFlags().StringVar(&host, "host", "127.0.0.1",
-		"host to run the server on")
-	rootCmd.PersistentFlags().IntVar(&port, "port", 8080,
-		"port to run the server on")
-	rootCmd.PersistentFlags().StringVar(&configPath, "config", "",
-		"path to config file (required)")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config",
+		"/etc/auth-agent/config.yaml", "path to config file")
+}
+
+func setUp() *db.TokenDB {
+	// Set the log level
+	setLogging(logLevel)
+
+	// Load the config file
+	var err error
+	config, err = loadConfig(configPath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load config")
+	}
+
+	// Create the database client
+	tokenDB := db.NewTokenDB(config.APIToken)
+	err = tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to open database")
+	}
+
+	return tokenDB
 }
 
 type Config struct {
@@ -121,7 +73,7 @@ type Config struct {
 	Authorizer     authz.AuthorizerInputs        `yaml:"authorizer"`
 	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
 	Database       databaseConfig                `yaml:"database"`
-	APITokenConfig db.APITokenConfig             `yaml:"api_token"`
+	APIToken       db.TokenDBInputs              `yaml:"api_token"`
 }
 
 type databaseConfig struct {

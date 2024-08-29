@@ -22,3 +22,5 @@
 - Created api/middleware package
   - Adds logging context to request context
   - Adds claims context to request context when authenticated
+- Created admin CLI for managing tokens on behalf of users
+  - Note that this requires Keycloak client to have permission to impersonate users

@@ -12,47 +12,38 @@ import (
 const OriginalURI string = "X-Original-URI"
 
 type Authenticator interface {
-	GetAuthenticatedClaims(r *http.Request) (*authn.Claims, error)
+	IsAuthenticated(w http.ResponseWriter, req *http.Request) (bool,
+		*authn.Claims, error)
 }
 type Authorizer interface {
-	IsAuthorized(r *http.Request, body authz.OPARequestBody) (bool, error)
+	IsAuthorized(req *http.Request, body authz.OPARequestBody) (bool, error)
 }
 
 func AuthHandler(authenticators []Authenticator,
 	authorizer Authorizer) http.HandlerFunc {
 
-	return func(w http.ResponseWriter, r *http.Request) {
-		originalURI := r.Header.Get(OriginalURI)
+	return func(w http.ResponseWriter, req *http.Request) {
+		originalURI := req.Header.Get(OriginalURI)
 
-		logger := zerolog.Ctx(r.Context()).With().Str("original_uri",
+		logger := zerolog.Ctx(req.Context()).With().Str("original_uri",
 			originalURI).Logger()
-
-		// Initialise authentication variables
-		isAuthenticated := false
-		claims := &authn.Claims{}
 
 		// Loop through the authenticators in order and break on the first
 		// to pass authentication, returning the claims from that authenticator
+		isAuthenticated := false
+		var claims authn.Claims
 		for _, authenticator := range authenticators {
-			c, err := authenticator.GetAuthenticatedClaims(r)
-			if err != nil {
-				continue
+			authenticated, claims_, _ := authenticator.IsAuthenticated(w, req)
+			if authenticated {
+				logger.Info().Msg("request authenticated")
+				isAuthenticated = true
+				claims = *claims_
+				break
 			}
-
-			// If err is nil, the request is authenticated
-			isAuthenticated = true
-			claims = c
-			break
-		}
-		if isAuthenticated {
-			logger = logger.With().Str("user", claims.Username).Logger()
-			logger.Info().Msg("request authenticated")
-		} else {
-			logger.Info().Msg("request not authenticated")
 		}
 
 		// Use the claims from the authenticated request to check authorization
-		isAuthorized, err := authorizer.IsAuthorized(r, authz.OPARequestBody{
+		isAuthorized, err := authorizer.IsAuthorized(req, authz.OPARequestBody{
 			Input: authz.OPARequestBodyInput{
 				Username: claims.Username,
 				Roles:    claims.RealmAccess.Roles,
@@ -68,7 +59,7 @@ func AuthHandler(authenticators []Authenticator,
 
 		// Handle authentication requests
 		if isAuthorized {
-			logger.Info().Msg("request authorized")
+			logger.Info().Msg("request is authorized")
 			w.WriteHeader(http.StatusOK)
 		} else if !isAuthenticated {
 			logger.Info().Msg("request requires authentication")

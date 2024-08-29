@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -24,35 +25,40 @@ type Token struct {
 
 func (t Token) IsValid() bool {
 	// Include a 5 second buffer to account for any latency
-	return time.Now().Add(5*time.Second).Unix() >= t.AccessExpiry
+	return time.Now().Add(5*time.Second).Unix() < t.AccessExpiry
 }
 
 var ErrNotFound = errors.New("db: not found")
 var ErrTokenExpired = errors.New("db: token expired")
 
 type TokenDB struct {
-	APITokenConfig
-	db     *sql.DB
-	crypto *crypto
-	log    *zerolog.Logger
+	TokenDBInputs
+	db          *sql.DB
+	crypto      *crypto
+	prefixBytes []byte
+	log         *zerolog.Logger
 }
 
-type APITokenConfig struct {
+type TokenDBInputs struct {
 	Prefix string `yaml:"prefix"`
 	Secret string `yaml:"secret"`
 }
 
-func NewTokenDB(config APITokenConfig) *TokenDB {
+func NewTokenDB(inputs TokenDBInputs) *TokenDB {
 	logger := log.With().Str("name", "token db").Logger()
-	crypto, err := newCrypto(config.Secret)
+	crypto, err := newCrypto(inputs.Secret)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to create crypto for database")
-		panic(err)
+		logger.Fatal().Err(err).Msg("db: failed to create crypto for database")
+	}
+	if len(inputs.Prefix) != 4 {
+		logger.Fatal().Str("prefix", inputs.Prefix).
+			Msg("db: token prefix must be 4 characters long")
 	}
 	return &TokenDB{
-		APITokenConfig: config,
-		crypto:         crypto,
-		log:            &logger,
+		TokenDBInputs: inputs,
+		crypto:        crypto,
+		prefixBytes:   []byte(inputs.Prefix),
+		log:           &logger,
 	}
 }
 
@@ -313,11 +319,18 @@ func (t TokenDB) DeleteTokenByID(id, userID string) error {
 	return nil
 }
 
+func (t TokenDB) IsAPIToken(token string) bool {
+	tokenBytes, err := hex.DecodeString(token)
+	if err != nil {
+		return false
+	}
+	return bytes.HasPrefix(tokenBytes, t.prefixBytes)
+}
+
 func (t TokenDB) GenerateAPIToken() (string, error) {
 	tokenBytes := make([]byte, 16)
-	prefixLen := len(t.APITokenConfig.Prefix)
-	copy(tokenBytes[0:prefixLen], []byte(t.APITokenConfig.Prefix))
-	_, err := rand.Read(tokenBytes[prefixLen:])
+	copy(tokenBytes[0:4], t.prefixBytes)
+	_, err := rand.Read(tokenBytes[4:])
 	if err != nil {
 		return "", err
 	}

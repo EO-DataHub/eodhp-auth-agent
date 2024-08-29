@@ -83,6 +83,8 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		// Get the token from the context
 		authToken := r.Context().Value(middleware.TokenKey).(string)
 
+		logger.Debug().Str("auth_token", authToken).Msg("Got auth token")
+
 		// Get the offline token from the Keycloak client
 		resp, err := auth.GetOfflineToken(authToken)
 		if err != nil {
@@ -106,10 +108,10 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			ID:     uuid.New().String(),
 			Token:  apiToken,
 			UserID: claims.Subject,
-			Access: resp.AccessToken,
+			Access: resp.Access,
 			AccessExpiry: time.Now().Add(time.Duration(resp.ExpiresIn) *
 				time.Second).Unix(),
-			Refresh: resp.RefreshToken,
+			Refresh: resp.Refresh,
 		}
 		if err = tokenDB.CreateToken(token); err != nil {
 			logger.Error().Err(err).Msg("Failed to create token")

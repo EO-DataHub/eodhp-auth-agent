@@ -22,24 +22,28 @@ cd eo-datahub-auth-agent
 ### Running the Server
 
 ```sh
-go run main.go --config config.yaml
+go run main.go runserver --help
 ```
-
-The server will start on port 8080.
-
-To view command line options append `--help` to the run command.
 
 ### Init DB
 
-Before using a database it is necessay to create the tables. The initdb command can be used for this.
+Before using a database it is necessary to create the tables. The initdb command can be used for this.
 
 ```sh
-go run main.go initdb --config config.yaml
+go run main.go initdb --help
+```
+
+### Token CLI
+
+A CLI is provided for admin management of tokens. This requires the Keycloak client to have permission to impersonate users, which can be a security risk if client credentials are ever leaked, so implement with caution.
+
+```sh
+go run main.go token --help
 ```
 
 ### Configuration
 
-Configuration is controlled via a configuration file. The path to this file must be passed in on the command line using the `--config` flag.
+Configuration is controlled via a configuration file. The default config location is _/etc/auth-agent/config.yaml_. If another config path is to be user then it must be passed in on the command line using the `--config` flag.
 
 An example config file is included in this repo as _./example-config.yaml_.
 
@@ -48,14 +52,14 @@ The config file is templated against environment variables when it is loaded. Th
 ## Building for Production
 
 ```sh
-go build -a -o dist/auth-agent cmd/main.go
+go build -a -o dist/auth-agent main.go
 ```
 
 ## Deployment
 
 ```sh
 docker build -t auth-agent .
-docker run -v /absolute/path/to/config.yaml:/app/config.yaml auth-agent --config /app/config.yaml
+docker run -v /absolute/path/to/config.yaml:/etc/auth-agent/config.yaml auth-agent
 ```
 
 ## Testing
