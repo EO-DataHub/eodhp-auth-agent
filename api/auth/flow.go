@@ -84,8 +84,9 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	isAuthorized, err := a.authz.IsAuthorized(req, authz.OPARequestBody{
 		Input: authz.OPARequestBodyInput{
 			Username: claims.Username,
-			Roles:    claims.RealmAccess.Roles,
+			Host:     req.Host,
 			Path:     originalURI,
+			Roles:    claims.RealmAccess.Roles,
 		},
 	})
 	if err != nil {

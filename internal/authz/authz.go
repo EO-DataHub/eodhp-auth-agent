@@ -14,8 +14,9 @@ type OPARequestBody struct {
 
 type OPARequestBodyInput struct {
 	Username string   `json:"username"`
-	Roles    []string `json:"roles"`
+	Host     string   `json:"host"`
 	Path     string   `json:"path"`
+	Roles    []string `json:"roles"`
 }
 
 type opaResponseBody struct {
