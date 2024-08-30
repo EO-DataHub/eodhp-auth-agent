@@ -56,11 +56,11 @@ var runServerCmd = &cobra.Command{
 			tokenDB))).Methods(http.MethodDelete)
 
 		// Start the server
-		fmt.Printf("Starting server on %s:%d\n", host, port)
+		fmt.Printf("starting server on %s:%d\n", host, port)
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
 			r); err != nil {
 
-			log.Error().Err(err).Msg("Could not start server")
+			log.Error().Err(err).Msg("could not start server")
 		}
 	},
 }

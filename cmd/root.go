@@ -54,14 +54,28 @@ func setUp() *db.TokenDB {
 	var err error
 	config, err = loadConfig(configPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to load config")
+		log.Fatal().Err(err).Msg("failed to load config")
 	}
+
+	fmt.Println("config loaded")
+	fmt.Println("\nauth flows:")
+	for _, flow := range config.AuthFlows {
+		fmt.Printf("- name: %s\n", flow.Name)
+		fmt.Printf("  domains: %s\n", flow.Domains)
+		fmt.Printf("  authentication url: %s\n", flow.AuthenticationURL)
+		fmt.Printf("  authorization url: %s\n", flow.AuthorizationURL)
+	}
+	fmt.Printf("keycloak url: %s\n", config.Keycloak.KeycloakURL)
+	fmt.Printf("realm: %s\n", config.Keycloak.Realm)
+	fmt.Printf("client id: %s\n", config.Keycloak.ClientID)
+	fmt.Printf("database driver: %s\n", config.Database.Driver)
+	fmt.Printf("api prefix: %s\n\n", config.APIToken.Prefix)
 
 	// Create the database client
 	tokenDB := db.NewTokenDB(config.APIToken)
 	err = tokenDB.OpenDB(config.Database.Driver, config.Database.Source)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to open database")
+		log.Fatal().Err(err).Msg("failed to open database")
 	}
 
 	return tokenDB
@@ -83,14 +97,14 @@ func loadConfig(path string) (*Config, error) {
 	// Read the config file
 	if path == "" {
 		err := errors.New("--config flag is required")
-		log.Fatal().Err(err).Msg("Config file not provided")
+		log.Fatal().Err(err).Msg("config file not provided")
 		return nil, err
 	}
 
 	// Parse the template file
 	tmpl, err := template.ParseFiles(path)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error parsing config file template")
+		log.Fatal().Err(err).Msg("error parsing config file template")
 	}
 
 	// Create a map of environment variables
@@ -100,13 +114,13 @@ func loadConfig(path string) (*Config, error) {
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, envVars)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error executing config file template")
+		log.Fatal().Err(err).Msg("error executing config file template")
 	}
 
 	// Load the config
 	c := &Config{}
 	if err := c.loadConfig(buf.Bytes()); err != nil {
-		log.Fatal().Err(err).Msg("Failed to load config")
+		log.Fatal().Err(err).Msg("failed to load config")
 		return nil, err
 	}
 
@@ -117,7 +131,7 @@ func (c *Config) loadConfig(data []byte) error {
 	// Unmarshal the YAML data into the config struct
 	err := yaml.Unmarshal(data, &c)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to unmarshal file")
+		log.Error().Err(err).Msg("failed to unmarshal file")
 		return err
 	}
 
