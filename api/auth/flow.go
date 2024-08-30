@@ -9,7 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const OriginalURI string = "X-Original-URI"
+const OriginalHost = "X-Original-Host"
+const OriginalURI = "X-Original-URI"
 
 type AuthFlowInputs struct {
 	Name              string   `yaml:"name"`
@@ -70,9 +71,7 @@ func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
 func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	bool, bool) {
 
-	originalURI := req.Header.Get(OriginalURI)
-	logger := zerolog.Ctx(req.Context()).With().Str("original_uri",
-		originalURI).Logger()
+	logger := zerolog.Ctx(req.Context()).With().Logger()
 
 	// Check authentication, returning claims if authenticated
 	isAuthenticated, claims, err := a.authn.IsAuthenticated(w, req)
@@ -84,8 +83,8 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	isAuthorized, err := a.authz.IsAuthorized(req, authz.OPARequestBody{
 		Input: authz.OPARequestBodyInput{
 			Username: claims.Username,
-			Host:     req.Host,
-			Path:     originalURI,
+			Host:     req.Header.Get(OriginalHost),
+			Path:     req.Header.Get(OriginalURI),
 			Roles:    claims.RealmAccess.Roles,
 		},
 	})

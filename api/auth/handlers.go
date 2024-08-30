@@ -3,6 +3,8 @@ package auth
 import (
 	"fmt"
 	"net/http"
+
+	"github.com/rs/zerolog"
 )
 
 type AuthProcessor interface {
@@ -13,14 +15,38 @@ type AuthProcessor interface {
 func AuthHandler(flows []AuthProcessor) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		var isAuthenticated, isAuthorized bool
+		originalHost := req.Header.Get(OriginalHost)
+		originalURI := req.Header.Get(OriginalURI)
+
+		logger := zerolog.Ctx(req.Context()).With().Str("original_host",
+			originalHost).Str("original_uri", originalURI).Logger()
+
+		logger.Debug().Msg("received request")
+
+		req = req.WithContext(logger.WithContext(req.Context()))
+
+		if originalHost == "" {
+			logger.Warn().Str(OriginalHost, originalHost).
+				Msg("missing original host, unexpected behaviour may occur")
+		}
+		if originalURI == "" {
+			logger.Warn().Str(OriginalURI, originalURI).
+				Msg("missing original uri, unexpected behaviour may occur")
+		}
+
+		var isAuthenticated, isAuthorized, broke bool
 		for _, flow := range flows {
 			if !flow.IsHostAllowed(req.Host) {
 				continue
 			}
 
 			isAuthenticated, isAuthorized = flow.ProcessRequest(w, req)
+			broke = true
 			break
+		}
+
+		if !broke {
+			logger.Warn().Msg("no auth flow matched the request")
 		}
 
 		// Handle authentication requests

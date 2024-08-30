@@ -76,6 +76,7 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 		return false, Claims{}, err
 	}
 	r2.Host, r2.Header = req.Host, req.Header
+
 	resp, err := a.http.Do(r2)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to send auth request")
