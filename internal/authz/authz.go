@@ -68,8 +68,8 @@ func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 		logger.Error().Err(err).Msg("failed to decode authorization response")
 		return false, err
 	}
-	logger.Debug().Bool("result", opaResp.Result).
-		Msg("authorization response received")
+	logger.Debug().Interface("authz request", body).Bool("result",
+		opaResp.Result).Msg("authorization response received")
 
 	return opaResp.Result, nil
 }

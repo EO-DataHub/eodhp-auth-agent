@@ -71,25 +71,31 @@ func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
 func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	bool, bool) {
 
-	logger := zerolog.Ctx(req.Context()).With().Logger()
+	logger := zerolog.Ctx(req.Context())
 
 	// Check authentication, returning claims if authenticated
 	isAuthenticated, claims, err := a.authn.IsAuthenticated(w, req)
 	if err != nil {
-		logger.Warn().Err(err).Msg("authentication failed")
+		logger.Error().Err(err).Msg("authentication failed")
 	}
 
 	// Use the claims from the authenticated request to check authorization
+	host := req.Header.Get(OriginalHost)
+	if host == "" {
+		logger.Debug().Msgf("authz: %s header empty, using Host header as fallback",
+			OriginalHost)
+		host = req.Host
+	}
 	isAuthorized, err := a.authz.IsAuthorized(req, authz.OPARequestBody{
 		Input: authz.OPARequestBodyInput{
 			Username: claims.Username,
-			Host:     req.Header.Get(OriginalHost),
+			Host:     host,
 			Path:     req.Header.Get(OriginalURI),
 			Roles:    claims.RealmAccess.Roles,
 		},
 	})
 	if err != nil {
-		logger.Warn().Err(err).Msg("authorization failed")
+		logger.Error().Err(err).Msg("authorization failed")
 	}
 
 	return isAuthenticated, isAuthorized

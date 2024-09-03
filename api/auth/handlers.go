@@ -15,37 +15,23 @@ type AuthProcessor interface {
 func AuthHandler(flows []AuthProcessor) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		originalHost := req.Header.Get(OriginalHost)
-		originalURI := req.Header.Get(OriginalURI)
-
-		logger := zerolog.Ctx(req.Context()).With().Str("original_host",
-			originalHost).Str("original_uri", originalURI).Logger()
+		logger := zerolog.Ctx(req.Context()).With().Str("original uri",
+			req.Header.Get(OriginalURI)).Logger()
 
 		logger.Debug().Msg("received request")
 
-		req = req.WithContext(logger.WithContext(req.Context()))
-
-		if originalHost == "" {
-			logger.Warn().Str(OriginalHost, originalHost).
-				Msg("missing original host, unexpected behaviour may occur")
-		}
-		if originalURI == "" {
-			logger.Warn().Str(OriginalURI, originalURI).
-				Msg("missing original uri, unexpected behaviour may occur")
-		}
-
-		var isAuthenticated, isAuthorized, broke bool
+		var isAuthenticated, isAuthorized, hostAllowed bool
 		for _, flow := range flows {
 			if !flow.IsHostAllowed(req.Host) {
 				continue
 			}
 
 			isAuthenticated, isAuthorized = flow.ProcessRequest(w, req)
-			broke = true
+			hostAllowed = true
 			break
 		}
 
-		if !broke {
+		if !hostAllowed {
 			logger.Warn().Msg("no auth flow matched the request")
 		}
 
