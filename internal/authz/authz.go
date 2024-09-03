@@ -14,8 +14,9 @@ type OPARequestBody struct {
 
 type OPARequestBodyInput struct {
 	Username string   `json:"username"`
-	Roles    []string `json:"roles"`
+	Host     string   `json:"host"`
 	Path     string   `json:"path"`
+	Roles    []string `json:"roles"`
 }
 
 type opaResponseBody struct {
@@ -23,6 +24,7 @@ type opaResponseBody struct {
 }
 
 type AuthorizerInputs struct {
+	Name         string `yaml:"name"`
 	OPAClientURL string `yaml:"opa_client_url"`
 }
 
@@ -31,8 +33,8 @@ type Authorizer struct {
 	http *http.Client
 }
 
-func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
-	return Authorizer{
+func NewAuthorizer(inputs AuthorizerInputs) *Authorizer {
+	return &Authorizer{
 		AuthorizerInputs: inputs,
 		http:             &http.Client{},
 	}
@@ -41,7 +43,7 @@ func NewAuthorizer(inputs AuthorizerInputs) Authorizer {
 func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 	error) {
 
-	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", "OPA").Logger()
+	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", a.Name).Logger()
 
 	// Create the authorization request
 	authRequest, err := a.createAuthRequest(body)
@@ -66,8 +68,8 @@ func (a Authorizer) IsAuthorized(r *http.Request, body OPARequestBody) (bool,
 		logger.Error().Err(err).Msg("failed to decode authorization response")
 		return false, err
 	}
-	logger.Debug().Bool("result", opaResp.Result).
-		Msg("authorization response received")
+	logger.Debug().Interface("authz request", body).Bool("result",
+		opaResp.Result).Msg("authorization response received")
 
 	return opaResp.Result, nil
 }

@@ -7,8 +7,6 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/api/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
@@ -26,27 +24,23 @@ var runServerCmd = &cobra.Command{
 		// Create the Keycloak client
 		kcClient := keycloak.NewKeycloakClient(config.Keycloak)
 
-		// Create the authenticators
-		authenticators := make([]auth.Authenticator, len(config.Authenticators))
-		for i, a := range config.Authenticators {
-			var err error
-			authenticators[i], err = authn.NewAuthenticator(a, tokenDB,
-				kcClient)
+		// Create the auth flows
+		flows := make([]auth.AuthProcessor, len(config.AuthFlows))
+		var err error
+		for i, flowInputs := range config.AuthFlows {
+			flows[i], err = auth.NewAuthFlow(flowInputs, tokenDB, kcClient)
 			if err != nil {
-				log.Fatal().Str("authenticator", a.Name).Err(err).
-					Msg("Failed to create authenticator")
+				log.Fatal().Str("auth flow", flowInputs.Name).Err(err).
+					Msg("failed to create auth flow")
 			}
 		}
-
-		// Create the authorizer
-		authorizer := authz.NewAuthorizer(config.Authorizer)
 
 		// Create routes
 		r := mux.NewRouter()
 
 		// The auth route does not use the JWT middleware
-		r.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(
-			authenticators, authorizer))).Methods(http.MethodGet)
+		r.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(flows))).
+			Methods(http.MethodGet)
 
 		// The CRUD routes all use the same middleware
 		var middleware = func(next http.HandlerFunc) http.HandlerFunc {
@@ -62,11 +56,11 @@ var runServerCmd = &cobra.Command{
 			tokenDB))).Methods(http.MethodDelete)
 
 		// Start the server
-		fmt.Printf("Starting server on %s:%d\n", host, port)
+		fmt.Printf("starting server on %s:%d\n", host, port)
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
 			r); err != nil {
 
-			log.Error().Err(err).Msg("Could not start server")
+			log.Error().Err(err).Msg("could not start server")
 		}
 	},
 }
