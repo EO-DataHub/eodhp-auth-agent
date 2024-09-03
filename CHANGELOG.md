@@ -2,7 +2,8 @@
 
 ## v0.2.0 (Unreleased)
 
-- Tied authenticators and authorizers together in "flows" per domain
+- Refactored authenticators and authorizers into configurable flows that can be mapped to host domains
+- X-Original-Host and X-Original-URI can be passed in to set OPA policy when they differ from request host and URI
 
 ## v0.1.0 (29-08-2024)
 

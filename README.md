@@ -49,6 +49,15 @@ An example config file is included in this repo as _./example-config.yaml_.
 
 The config file is templated against environment variables when it is loaded. This allows for passing in secret values at runtime. An example is given in _example-config.yaml_ for the postgres database source and the API secret.
 
+### Authenticating
+
+When querying the _/auth_ endpoint, either directly or via something like Nginx auth_request, the following headers can be included:
+
+- "Cookie" - Used to pass in any browser cookies used for authentication with Oauth2 Proxy authentication
+- "Authorization" - Used to authenticate via Bearer token to Oauth2 Proxy. Can be Keycloak JWT access token or Auth Agent API token.
+- "X-Original-Host" - Used to override the auth request host for OPA policy authorization. Optional.
+- "X-Original-URI" - Used to override the auth request path used for OPA policy authorization. Optional, but should almost always be set for correct behaviour.
+
 ## Building for Production
 
 ```sh
