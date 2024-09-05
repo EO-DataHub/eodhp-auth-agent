@@ -1,6 +1,6 @@
 # Auth Agent
 
-## v0.2.0 (Unreleased)
+## v0.2.0 (05-09-2024)
 
 - Refactored authenticators and authorizers into configurable flows that can be mapped to host domains
 - X-Original-Host and X-Original-URI can be passed in to set OPA policy when they differ from request host and URI
