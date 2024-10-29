@@ -30,7 +30,7 @@ jobs:
         run: |
           go mod download
           go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
-          apt-get install -y jq
+          sudo apt-get install -y jq
       - name: Test with Go (with coverage report)
         id: test
         run: go test -coverprofile cover.out -json ./... | tee test.out
