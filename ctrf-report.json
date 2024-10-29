@@ -1,0 +1,283 @@
+{
+  "results": {
+    "tool": {
+      "name": "gotest"
+    },
+    "summary": {
+      "tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 0,
+      "other": 0,
+      "start": 1730202599466,
+      "stop": 1730202599518
+    },
+    "tests": [
+      {
+        "name": "TestProcessRequest_AuthnAndAuthz_OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestProcessRequest_NoAuthnAndAuthz_Unauthorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestProcessRequest_AuthnAndNoAuthz_Forbidden",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestProcessRequest_NoAuthnAndNoAuthz_Unauthorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestIsHostAllowed_AllowedSpecific_True",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestIsHostAllowed_AllowedWildcard_True",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestIsHostAllowed_NotAllowed_False",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestIsHostAllowed_HostAllowedPartialWildcard_True",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestAuthHandler_AuthnAndAuthz_OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestAuthHandler_NoAuthnButAuthz_OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestAuthHandler_NoAuthnOrAuthz_Unauthorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestAuthHandler_AuthnButNoAuthz_Forbidden",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestAuthHandler_FirstAuthnAndAuthz_OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/auth"
+      },
+      {
+        "name": "TestJWTMiddleware_ValidBearerToken_ClaimsPopulated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
+      },
+      {
+        "name": "TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
+      },
+      {
+        "name": "TestListTokensHandler_Authenticated_Success",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestCreateTokenHandler_Authenticated_Success",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestGetTokenHandler_Authenticated_Success",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestDeleteTokenHandler_Authenticated_Success",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestListTokensHandler_NoTokens_SuccessEmptyList",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestGetTokenHandler_RequestTokenForAnotherUser_NotFound",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestGetTokenHandler_NotAuthenticated_Unauthorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+      },
+      {
+        "name": "TestLoadConfig",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/cmd"
+      },
+      {
+        "name": "TestLoadEnvVars",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/cmd"
+      },
+      {
+        "name": "TestIsAuthenticated_ValidBearerToken_Authenticated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestIsAuthenticated_ValidAPIToken_Authenticated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestIsAuthenticated_ExpiredAPIToken_Authenticated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestIsAuthenticated_NoAuth_Unauthenticated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestUnmarshalClaims_Valid",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestParseClaims_Valid",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+      },
+      {
+        "name": "TestIsAuthorized_Authorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
+      },
+      {
+        "name": "TestIsAuthorized_Unauthorized",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/authz"
+      },
+      {
+        "name": "TestCrypto_EncryptThenDecode_OriginalValue",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestCrypto_HashTwice_SameValue",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestNewKeycloakClient",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
+      },
+      {
+        "name": "TestKeycloakClient_RefreshToken_OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
+      },
+      {
+        "name": "TestGetToken_TokenExists",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestGetOfflineToken__OK",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
+      },
+      {
+        "name": "TestGetToken_TokenDoesNotExist",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestUpdateToken_Updated",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestIsAPIToken_Yes",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestIsAPIToken_DifferentPrefix_No",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      },
+      {
+        "name": "TestIsAPIToken_Invalid_No",
+        "status": "passed",
+        "duration": 0,
+        "suite": "github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+      }
+    ]
+  }
+}
