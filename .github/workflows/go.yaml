@@ -2,9 +2,11 @@ name: Go
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
-  golangci:
-    name: lint
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +18,6 @@ jobs:
         with:
           version: v1.60
   build:
-    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
