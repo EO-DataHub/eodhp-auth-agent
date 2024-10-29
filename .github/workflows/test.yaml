@@ -36,7 +36,7 @@ jobs:
       - name: Display test results
         if: always()
         run: |
-          go-ctrf-json-reporter -input test.out -output ctrf-report.json
+          cat test.out | go-ctrf-json-reporter -output ctrf-report.json
           npx github-actions-ctrf ctrf-report.json
       - uses: actions/upload-artifact@v4
         if: always()
