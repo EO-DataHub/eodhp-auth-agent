@@ -8,14 +8,12 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"hash"
 	"io"
 )
 
 type crypto struct {
 	Key string
 	gcm cipher.AEAD
-	h   hash.Hash
 }
 
 func newCrypto(key string) (*crypto, error) {

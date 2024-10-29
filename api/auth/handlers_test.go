@@ -145,3 +145,7 @@ func TestAuthHandler_FirstAuthnAndAuthz_OK(t *testing.T) {
 	assert.True(t, flows[0].(*AuthFlowMock).called)
 	assert.False(t, flows[1].(*AuthFlowMock).called)
 }
+
+func TestForceFail(t *testing.T) {
+	assert.True(t, false)
+}
