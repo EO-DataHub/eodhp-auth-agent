@@ -27,9 +27,11 @@ jobs:
       - name: Install dependencies
         run: go mod download
       - name: Test with Go
-        run: go test -json ./... > TestResults.json
+        run: go test -json ./... | go-ctrf-json-reporter -output ctrf-report.json
+      - name: Display test results
+        run: npx github-actions-ctrf ctrf-report.json
       - name: Upload Go test results
         uses: actions/upload-artifact@v4
         with:
           name: Go-results
-          path: TestResults.json
+          path: ctrf-report.json
