@@ -29,6 +29,3 @@ jobs:
       AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
       AWS_ECR: ${{ vars.AWS_ECR }}
       AWS_REGION: ${{ vars.AWS_REGION }}
-    
-      
-    
