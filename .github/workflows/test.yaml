@@ -32,10 +32,14 @@ jobs:
           go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
       - name: Test with Go (with coverage report)
         id: test
-        run: go test -coverprofile cover.out -json ./... | go-ctrf-json-reporter -output ctrf-report.json
+        run: go test -coverprofile cover.out -json ./... | tee test.out
       - name: Display test results
-        run: npx github-actions-ctrf ctrf-report.json
+        if: always()
+        run: |
+          go-ctrf-json-reporter -input test.out -output ctrf-report.json
+          npx github-actions-ctrf ctrf-report.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: cover.out
           path: cover.out
