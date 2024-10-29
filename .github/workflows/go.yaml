@@ -28,7 +28,16 @@ jobs:
         run: |
           go mod download
           go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
-      - name: Test with Go
-        run: go test -json ./... | go-ctrf-json-reporter -output ctrf-report.json
+          go install golang.org/x/tools/cmd/cover
+      - name: Test with Go (with coverage report)
+        run: go test -coverprofile cover.out -json ./... | go-ctrf-json-reporter -output ctrf-report.json
       - name: Display test results
         run: npx github-actions-ctrf ctrf-report.json
+      - name: Check test coverage
+        uses: vladopajic/go-test-coverage@v2
+        with:
+          profile: cover.out
+          local-prefix: github.com/org/project
+          threshold-file: 80
+          threshold-package: 80
+          threshold-total: 95
