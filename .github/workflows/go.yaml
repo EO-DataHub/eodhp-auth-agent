@@ -17,7 +17,8 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
-  build:
+  test:
+    name: Build and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,10 +33,16 @@ jobs:
         run: go test -coverprofile cover.out -json ./... | go-ctrf-json-reporter -output ctrf-report.json
       - name: Display test results
         run: npx github-actions-ctrf ctrf-report.json
+    outputs:
+      coverage: cover.out
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
       - name: Check test coverage
         uses: vladopajic/go-test-coverage@v2
         with:
-          profile: cover.out
+          profile: ${{ needs.test.outputs.coverage }}
           local-prefix: github.com/org/project
           threshold-file: 80
           threshold-package: 80
