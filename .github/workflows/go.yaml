@@ -28,8 +28,7 @@ jobs:
         run: |
           go mod download
           go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
-          npm install -g github-actions-ctrf
       - name: Test with Go
         run: go test -json ./... | go-ctrf-json-reporter -output ctrf-report.json
       - name: Display test results
-        run: github-actions-ctrf ctrf-report.json
+        run: npx github-actions-ctrf ctrf-report.json
