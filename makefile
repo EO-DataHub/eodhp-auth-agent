@@ -1,15 +1,15 @@
 # Default input parameters
 docker ?= docker
 image ?= public.ecr.aws/n1b3o1k2/eodhp-auth-agent
-version ?= 0.2.0
+version ?= 0.2.1
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
 
 .PHONY: build
-docker-build:
+build:
 	$(docker) build -t $(image):$(version) .
 
 .PHONY: publish
-docker-publish:
+publish:
 	$(docker) push $(image):$(version)

@@ -86,9 +86,14 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		// Get the offline token from the Keycloak client
 		resp, err := auth.GetOfflineToken(authToken)
 		if err != nil {
+			var errStatus int
+			if err, ok := err.(*keycloak.HTTPError); ok {
+				errStatus = err.Status
+			} else {
+				errStatus = http.StatusInternalServerError
+			}
 			logger.Error().Err(err).Msg("Failed to get offline token")
-			http.Error(w, "Failed to get offline token",
-				http.StatusInternalServerError)
+			http.Error(w, err.Error(), errStatus)
 			return
 		}
 

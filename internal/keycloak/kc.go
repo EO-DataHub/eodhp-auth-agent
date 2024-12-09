@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +23,20 @@ type KeycloakClient struct {
 	KeycloakClientInputs
 	http *http.Client
 	log  *zerolog.Logger
+}
+
+type HTTPError struct {
+	Message string
+	Status  int
+}
+
+type KeycloakError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
+func (e *HTTPError) Error() string {
+	return e.Message
 }
 
 func NewKeycloakClient(inputs KeycloakClientInputs) *KeycloakClient {
@@ -59,8 +74,8 @@ func (k KeycloakClient) RefreshToken(refreshToken string) (*TokenResponse,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to refresh token, status code: %d",
-			resp.StatusCode)
+		return nil, &HTTPError{Message: "failed to refresh token",
+			Status: resp.StatusCode}
 	}
 
 	var tokenResponse TokenResponse
@@ -90,8 +105,23 @@ func (k KeycloakClient) GetOfflineToken(accessToken string) (*TokenResponse,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to exchange token, status code: %d",
-			resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+
+		// Detect invalid token (Bad Request) and convert to Unauthorized error
+		// for redirection to login page
+		var body KeycloakError
+		if err := json.Unmarshal(bodyBytes, &body); err != nil {
+			body.Error = resp.Status
+			body.ErrorDescription = string(bodyBytes)
+		}
+		var errStatus int
+		if resp.StatusCode == http.StatusBadRequest && body.ErrorDescription == "Invalid token" {
+			errStatus = http.StatusUnauthorized
+		} else {
+			errStatus = resp.StatusCode
+		}
+
+		return nil, &HTTPError{Message: body.ErrorDescription, Status: errStatus}
 	}
 
 	var tokenResponse TokenResponse
@@ -125,9 +155,9 @@ func (k KeycloakClient) GetClientCredentials() (*TokenResponse, error) {
 
 	// Check the response status code
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"failed to get client credentials, status code: %d",
-			resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, &HTTPError{Message: string(bodyBytes),
+			Status: resp.StatusCode}
 	}
 
 	// Decode the response
@@ -163,8 +193,9 @@ func (k KeycloakClient) ImpersonateUser(accessToken, subject string) (
 
 	// Check the response status code
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to impersonate user, status code: %d",
-			resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, &HTTPError{Message: string(bodyBytes),
+			Status: resp.StatusCode}
 	}
 
 	// Decode the response
