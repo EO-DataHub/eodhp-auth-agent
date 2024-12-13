@@ -115,9 +115,9 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	// Setup auth server response for Keycloak Client
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := &keycloak.TokenResponse{
-			Access:  "test-access-token",
-			Refresh: "test-refresh-token",
-			ExpiresIn:    3600,
+			Access:    "test-access-token",
+			Refresh:   "test-refresh-token",
+			ExpiresIn: 3600,
 		}
 		w.WriteHeader(http.StatusOK)
 		respBody, err := json.Marshal(resp)
@@ -167,6 +167,52 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
 	assert.NoError(t, err)
 	assert.Equal(t, response.ID, dbToken.ID)
+}
+
+func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
+	// Setup Token DB
+	tokenDB := setupTokenDB()
+	defer tokenDB.CloseDB()
+
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := &keycloak.KeycloakError{
+			Error:            "invalid_request",
+			ErrorDescription: "Invalid token",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		respBody, err := json.Marshal(resp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = w.Write(respBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
+	// Create handler
+	handler := CreateTokenHandler(tokenDB, k)
+
+	// Setup request and response
+	r := httptest.NewRequest("POST", "/tokens", nil)
+	userID := "ABCDEFG-12345678"
+	claims := authn.Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: userID,
+		},
+	}
+	token, err := authn.CreateJWTToken(claims, "secret-key")
+	assert.NoError(t, err)
+	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
+	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
+	w := httptest.NewRecorder()
+
+	// Test the handler
+	handler.ServeHTTP(w, r.WithContext(ctx))
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
