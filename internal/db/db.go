@@ -27,9 +27,13 @@ type Token struct {
 	Created      int64
 }
 
-func (t Token) IsValid() bool {
+func (t Token) RequiresRefresh() bool {
 	// Include a 5 second buffer to account for any latency
-	return time.Now().Add(5*time.Second).Unix() < t.AccessExpiry
+	return time.Now().Add(5*time.Second).Unix() > t.AccessExpiry
+}
+
+func (t Token) IsExpired() bool {
+	return time.Now().Unix() > t.Expires
 }
 
 var ErrNotFound = errors.New("db: not found")

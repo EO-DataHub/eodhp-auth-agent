@@ -145,9 +145,14 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 		return "", fmt.Errorf("failed to get token by api token: %w", err)
 	}
 
+	// Check if API token has expired
+	if token.IsExpired() {
+		return "", fmt.Errorf("api token has expired")
+	}
+
 	// Check token access expiry
-	if !token.IsValid() {
-		// Token has expired, refresh it
+	if token.RequiresRefresh() {
+		// Access token has expired, refresh it
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)
