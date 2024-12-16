@@ -15,8 +15,18 @@ import (
 )
 
 type GetTokenResponse struct {
-	ID     string `json:"id"`
-	UserID string `json:"user_id"`
+	ID      string `json:"id"`
+	UserID  string `json:"user_id"`
+	Name    string `json:"name"`
+	Scope   string `json:"scope"`
+	Expires string `json:"expiry"`
+	Created string `json:"created"`
+}
+
+type CreateTokenRequest struct {
+	Name    string `json:"name"`
+	Scope   string `json:"scope"`
+	Expires int    `json:"expiry"`
 }
 
 type CreateTokenResponse struct {
@@ -57,8 +67,12 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 		response := make([]GetTokenResponse, len(tokens))
 		for i, token := range tokens {
 			response[i] = GetTokenResponse{
-				ID:     token.ID,
-				UserID: token.UserID,
+				ID:      token.ID,
+				UserID:  token.UserID,
+				Name:    token.Name,
+				Scope:   token.Scope,
+				Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 			}
 		}
 		json.NewEncoder(w).Encode(response)
@@ -83,8 +97,19 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		// Get the token from the context
 		authToken := r.Context().Value(middleware.TokenKey).(string)
 
+		// Get the scope from the payload
+		req := CreateTokenRequest{
+			Expires: 30, // default expiry time is 30 days
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logger.Error().Err(err).Msg("Failed to decode request")
+			http.Error(w, "Failed to decode request",
+				http.StatusBadRequest)
+			return
+		}
+
 		// Get the offline token from the Keycloak client
-		resp, err := auth.GetOfflineToken(authToken)
+		resp, err := auth.ExchangeToken(authToken, req.Scope)
 		if err != nil {
 			var errStatus int
 			if err, ok := err.(*keycloak.HTTPError); ok {
@@ -115,6 +140,11 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			AccessExpiry: time.Now().Add(time.Duration(resp.ExpiresIn) *
 				time.Second).Unix(),
 			Refresh: resp.Refresh,
+			Name:    req.Name,
+			Scope:   req.Scope,
+			Expires: time.Now().Add(time.Duration(req.Expires) *
+				time.Hour * 24).Unix(), // Now + d days
+			Created: time.Now().Unix(),
 		}
 		if err = tokenDB.CreateToken(token); err != nil {
 			logger.Error().Err(err).Msg("Failed to create token")
@@ -127,8 +157,12 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(CreateTokenResponse{
 			GetTokenResponse: GetTokenResponse{
-				ID:     token.ID,
-				UserID: token.UserID,
+				ID:      token.ID,
+				UserID:  token.UserID,
+				Name:    token.Name,
+				Scope:   token.Scope,
+				Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 			},
 			Token: token.Token,
 		})
@@ -173,8 +207,12 @@ func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 		// Write the response
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(GetTokenResponse{
-			ID:     token.ID,
-			UserID: token.UserID,
+			ID:      token.ID,
+			UserID:  token.UserID,
+			Name:    token.Name,
+			Scope:   token.Scope,
+			Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+			Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 		})
 	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
@@ -19,13 +20,23 @@ var tokenCmd = &cobra.Command{
 
 // Define the create subcommand
 var createTokenCmd = &cobra.Command{
-	Use:   "create [user_id]",
+	Use:   "create [user_id] --scope [scope]",
 	Short: "Create a new token",
 	Long:  `Create a new token for a user.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		// Get inputs
 		userID := args[0]
 		fmt.Printf("Creating token for user ID %s\n", userID)
+
+		scope, err := cmd.Flags().GetString("scope")
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to get scope flag")
+		}
+		scope = strings.ReplaceAll(scope, ",", " ")
+		fmt.Printf("Requesting token with scope '%s'\n", scope)
+
+		// Set up the database
 		tokenDB := setUp()
 		defer tokenDB.CloseDB()
 
@@ -45,7 +56,7 @@ var createTokenCmd = &cobra.Command{
 		}
 
 		// Get offline access token
-		offlineToken, err := kcClient.GetOfflineToken(userToken.Access)
+		offlineToken, err := kcClient.ExchangeToken(userToken.Access, scope)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to get offline token")
 		}

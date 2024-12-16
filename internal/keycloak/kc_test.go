@@ -88,7 +88,7 @@ func TestGetOfflineToken__OK(t *testing.T) {
 
 	userToken := "myusertoken"
 
-	offlineToken, err := client.GetOfflineToken(userToken)
+	offlineToken, err := client.ExchangeToken(userToken, "offline_access")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, offlineToken)

@@ -1,6 +1,7 @@
 package tokens
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -136,8 +137,15 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	handler := CreateTokenHandler(tokenDB, k)
 
 	// Setup request and response
-	r := httptest.NewRequest("POST", "/tokens", nil)
 	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		"name":  "test-token",
+		"scope": "test-scope",
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
+	r.Header.Set("Content-Type", "application/json")
 	claims := authn.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -162,6 +170,8 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	assert.NotEqual(t, "", response.ID)
 	assert.NotEqual(t, "", response.Token)
 	assert.Equal(t, userID, response.UserID)
+	assert.Equal(t, payload["name"], response.Name)
+	assert.Equal(t, payload["scope"], response.Scope)
 
 	// Check object was created in DB
 	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
@@ -197,8 +207,14 @@ func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
 	handler := CreateTokenHandler(tokenDB, k)
 
 	// Setup request and response
-	r := httptest.NewRequest("POST", "/tokens", nil)
 	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		"name":  "test-token",
+		"scope": "test-scope",
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	claims := authn.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -230,6 +246,10 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -259,6 +279,8 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	}
 	assert.Equal(t, tokenID, response.ID)
 	assert.Equal(t, userID, response.UserID)
+	assert.Equal(t, "test-1", response.Name)
+	assert.Equal(t, "scope-1", response.Scope)
 }
 
 func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
@@ -276,6 +298,10 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -317,6 +343,10 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 		Access:       "test-access-4",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-4",
+		Name:         "test-4",
+		Scope:        "scope-4",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -361,6 +391,10 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -398,6 +432,10 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -435,6 +473,10 @@ func TestGetTokenHandler_NotAuthenticated_Unauthorized(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 

@@ -1,15 +1,21 @@
 # Default input parameters
+go ?= go
 docker ?= docker
 image ?= public.ecr.aws/n1b3o1k2/eodhp-auth-agent
-version ?= 0.2.1
+version ?= 0.3.0
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
 
-.PHONY: build
-build:
+.PHONY: test
+test:
+	$(go) test -coverprofile=coverage.out ./... && \
+	$(go) tool cover -html=coverage.out -o coverage.html
+
+.PHONY: container-build
+container-build:
 	$(docker) build -t $(image):$(version) .
 
-.PHONY: publish
-publish:
+.PHONY: container-push
+container-push:
 	$(docker) push $(image):$(version)
