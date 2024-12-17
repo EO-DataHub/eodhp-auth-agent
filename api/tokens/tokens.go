@@ -19,14 +19,14 @@ type GetTokenResponse struct {
 	UserID  string `json:"user_id"`
 	Name    string `json:"name"`
 	Scope   string `json:"scope"`
-	Expires string `json:"expiry"`
+	Expiry  string `json:"expiry"`
 	Created string `json:"created"`
 }
 
 type CreateTokenRequest struct {
 	Name    string `json:"name"`
 	Scope   string `json:"scope"`
-	Expires int    `json:"expiry"`
+	Expires int    `json:"expires"`
 }
 
 type CreateTokenResponse struct {
@@ -71,7 +71,7 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 				UserID:  token.UserID,
 				Name:    token.Name,
 				Scope:   token.Scope,
-				Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
 				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 			}
 		}
@@ -167,7 +167,7 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 				UserID:  token.UserID,
 				Name:    token.Name,
 				Scope:   token.Scope,
-				Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
 				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 			},
 			Token: token.Token,
@@ -217,13 +217,15 @@ func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 			UserID:  token.UserID,
 			Name:    token.Name,
 			Scope:   token.Scope,
-			Expires: time.Unix(token.Expires, 0).Format(time.RFC3339),
+			Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
 			Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 		})
 	}
 }
 
-func DeleteTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
+func DeleteTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
+) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
 			Str("handler", "delete token").Logger()
@@ -245,9 +247,26 @@ func DeleteTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 			return
 		}
 
-		// Delete the token from the database
-		err := tokenDB.DeleteTokenByID(tokenID, userID)
+		// Revoke the token in Keycloak
+		token, err := tokenDB.GetTokenByID(tokenID, userID)
 		if err != nil {
+			if err == db.ErrNotFound {
+				logger.Error().Err(err).Msg("Token not found")
+				http.Error(w, "Token not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Msg("Failed to get token")
+			http.Error(w, "Failed to get token", http.StatusInternalServerError)
+			return
+		}
+		if err := auth.RevokeToken(token.Refresh); err != nil {
+			logger.Error().Err(err).Msg("Failed to revoke token")
+			http.Error(w, "Failed to revoke token", http.StatusInternalServerError)
+			return
+		}
+
+		// Delete the token from the database
+		if err := tokenDB.DeleteTokenByID(tokenID, userID); err != nil {
 			if err == db.ErrNotFound {
 				logger.Error().Err(err).Msg("Token not found")
 				http.Error(w, "Token not found", http.StatusNotFound)

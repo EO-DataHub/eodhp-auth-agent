@@ -186,7 +186,7 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
 }
 
-func TestIsAuthenticated_ExpiredAPIToken_Authenticated(t *testing.T) {
+func TestIsAuthenticated_AccessTokenRequiresRefresh_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
 		StandardClaims: jwt.StandardClaims{
@@ -222,6 +222,7 @@ func TestIsAuthenticated_ExpiredAPIToken_Authenticated(t *testing.T) {
 			Access:       "access-token",
 			AccessExpiry: time.Now().Add(-10 * time.Minute).Unix(), // Expired
 			Refresh:      "refresh-token",
+			Expires:      time.Now().Add(time.Hour).Unix(),
 		},
 	}, &mockAuth{
 		refreshToken: &keycloak.TokenResponse{

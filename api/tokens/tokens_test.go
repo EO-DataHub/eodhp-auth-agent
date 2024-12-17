@@ -305,8 +305,15 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
 	// Create handler
-	handler := DeleteTokenHandler(d)
+	handler := DeleteTokenHandler(d, k)
 
 	// Setup request and response
 	r := httptest.NewRequest("DELETE", fmt.Sprintf("/tokens/%s", tokenID), nil)
@@ -439,8 +446,15 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
 	// Create handler
-	handler := DeleteTokenHandler(d)
+	handler := DeleteTokenHandler(d, k)
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
