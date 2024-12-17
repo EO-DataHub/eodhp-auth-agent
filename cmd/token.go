@@ -35,25 +35,25 @@ var createTokenCmd = &cobra.Command{
 		// Get client credentials
 		clientToken, err := kcClient.GetClientCredentials()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to get client credentials")
+			log.Fatal().Err(err).Msg("failed to get client credentials")
 		}
 
 		// Impersonate user
 		userToken, err := kcClient.ImpersonateUser(clientToken.Access, userID)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to impersonate user")
+			log.Fatal().Err(err).Msg("failed to impersonate user")
 		}
 
 		// Get offline access token
 		offlineToken, err := kcClient.GetOfflineToken(userToken.Access)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to get offline token")
+			log.Fatal().Err(err).Msg("failed to get offline token")
 		}
 
 		// Create the token
 		apiToken, err := tokenDB.GenerateAPIToken()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to generate API token")
+			log.Fatal().Err(err).Msg("failed to generate API token")
 		}
 		token := db.Token{
 			ID:           uuid.New().String(),
@@ -65,10 +65,85 @@ var createTokenCmd = &cobra.Command{
 		}
 		err = tokenDB.CreateToken(token)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to create token")
+			log.Fatal().Err(err).Msg("failed to create token")
 		}
 
 		fmt.Printf("Token created: %s\n", token.Token)
+	},
+}
+
+var infoTokenCmd = &cobra.Command{
+	Use:   "info [api_token]",
+	Short: "Get API token info",
+	Long:  `Get API token info.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		apiToken := args[0]
+		fmt.Printf("Get info for API token %s\n", apiToken)
+
+		access, _ := cmd.Flags().GetBool("access")
+		refresh, _ := cmd.Flags().GetBool("refresh")
+
+		tokenDB := setUp()
+		defer tokenDB.CloseDB()
+
+		token, err := tokenDB.GetTokenByAPIToken(apiToken)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to get api token")
+		}
+
+		fmt.Printf("ID: %s\n", token.ID)
+		fmt.Printf("User ID: %s\n", token.UserID)
+		if access {
+			fmt.Printf("Access: %s\n", token.Access)
+		}
+		if refresh {
+			fmt.Printf("Refresh: %s\n", token.Refresh)
+		}
+	},
+}
+
+var refreshTokenCmd = &cobra.Command{
+	Use:   "refresh [api_token]",
+	Short: "Refresh API token access token",
+	Long:  `Refresh API token access token.`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		apiToken := args[0]
+		fmt.Printf("Refreshing API token %s access token\n", apiToken)
+
+		access, _ := cmd.Flags().GetBool("access")
+
+		tokenDB := setUp()
+		defer tokenDB.CloseDB()
+
+		token, err := tokenDB.GetTokenByAPIToken(apiToken)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to get api token")
+		}
+
+		// Create the Keycloak client
+		kcClient := keycloak.NewKeycloakClient(config.Keycloak)
+
+		// Refresh token
+		tokenResponse, err := kcClient.RefreshToken(token.Refresh)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to refresh token")
+		}
+
+		// Update DB with new access token
+		token.Access = tokenResponse.Access
+		token.Refresh = tokenResponse.Refresh
+		token.AccessExpiry = time.Now().Unix() + int64(tokenResponse.ExpiresIn)
+		err = tokenDB.UpdateToken(*token)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to update token")
+		}
+
+		fmt.Printf("Token ID %s refreshed\n", token.ID)
+		if access {
+			fmt.Printf("Access: %s\n", token.Access)
+		}
 	},
 }
 
@@ -80,12 +155,13 @@ var listTokenCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		userID := args[0]
 		fmt.Printf("Listing tokens for user ID %s\n", userID)
+
 		tokenDB := setUp()
 		defer tokenDB.CloseDB()
 
 		tokens, err := tokenDB.ListUserTokens(userID)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to get tokens by user ID")
+			log.Fatal().Err(err).Msg("failed to get tokens by user ID")
 		}
 
 		fmt.Printf("Found %d tokens for user ID %s\n", len(tokens), userID)
@@ -109,18 +185,27 @@ var deleteTokenCmd = &cobra.Command{
 
 		err := tokenDB.DeleteTokenByID(userID, tokenID)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to delete token")
+			log.Fatal().Err(err).Msg("failed to delete token")
 		}
 
 	},
 }
 
 func init() {
+	// Add the token command to the root command
+	rootCmd.AddCommand(tokenCmd)
+
 	// Add subcommands to the main token command
 	tokenCmd.AddCommand(createTokenCmd)
+	tokenCmd.AddCommand(infoTokenCmd)
+	tokenCmd.AddCommand(refreshTokenCmd)
 	tokenCmd.AddCommand(listTokenCmd)
 	tokenCmd.AddCommand(deleteTokenCmd)
 
-	// Add the token command to the root command
-	rootCmd.AddCommand(tokenCmd)
+	// Add flags to the info subcommand
+	infoTokenCmd.Flags().Bool("access", false, "show access token")
+	infoTokenCmd.Flags().Bool("refresh", false, "show refresh token")
+
+	// Add flags to the refresh subcommand
+	refreshTokenCmd.Flags().Bool("access", false, "show access token")
 }
