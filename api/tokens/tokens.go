@@ -107,6 +107,11 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 				http.StatusBadRequest)
 			return
 		}
+		if req.Name == "" {
+			logger.Error().Msg("Name is required")
+			http.Error(w, "Name is required", http.StatusBadRequest)
+			return
+		}
 		if req.Expires > 30 {
 			logger.Error().Msg("Expiry time is too long")
 			http.Error(w, "Expiry time exceeds 30 day maximum",
