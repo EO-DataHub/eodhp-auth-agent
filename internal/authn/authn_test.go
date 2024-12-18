@@ -139,8 +139,13 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set(AuthResponseAccessTokenHeader, token)
-			w.WriteHeader(http.StatusOK)
+			// Only succeed if a token if the request has access-token authorization
+			if r.Header.Get("Authorization") == "Bearer access-token" {
+				w.Header().Set(AuthResponseAccessTokenHeader, token)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
 		}))
 	defer server.Close()
 
@@ -155,6 +160,7 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 			Access:       "access-token",
 			AccessExpiry: time.Now().Add(time.Hour).Unix(),
 			Refresh:      "refresh-token",
+			Expires:      time.Now().Add(time.Hour).Unix(),
 		},
 	}, &mockAuth{})
 	if err != nil {
@@ -206,8 +212,13 @@ func TestIsAuthenticated_AccessTokenRequiresRefresh_Authenticated(t *testing.T) 
 	// Create a new test HTTP server
 	server := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set(AuthResponseAccessTokenHeader, token)
-			w.WriteHeader(http.StatusOK)
+			// Only succeed if a token if the request has access-token authorization
+			if r.Header.Get("Authorization") == "Bearer new-access" {
+				w.Header().Set(AuthResponseAccessTokenHeader, token)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
 		}))
 	defer server.Close()
 
@@ -296,4 +307,68 @@ func TestIsAuthenticated_NoAuth_Unauthenticated(t *testing.T) {
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
+}
+
+func TestIsAuthenticated_ExpiredAPIToken_Unauthenticated(t *testing.T) {
+	// Create a valid auth response bearer token
+	token, err := CreateJWTToken(Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: "abcd-1234",
+		},
+		Username: "testuser",
+		RealmAccess: struct {
+			Roles []string `json:"roles"`
+		}{
+			Roles: []string{"test_role_1", "test_role_2"},
+		},
+	}, "secret")
+	if err != nil {
+		t.Fatalf("Error creating JWT token: %v", err)
+	}
+
+	// Create a new test HTTP server
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Only succeed if a token if the request has access-token authorization
+			if r.Header.Get("Authorization") == "Bearer access-token" {
+				w.Header().Set(AuthResponseAccessTokenHeader, token)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+	defer server.Close()
+
+	// Create a new authenticator
+	a, err := NewAuthenticator(AuthenticatorInputs{
+		AuthURL: server.URL,
+	}, &mockTokens{
+		getToken: &db.Token{
+			ID:           "token-id",
+			Token:        "api-token",
+			UserID:       "user-id",
+			Access:       "access-token",
+			AccessExpiry: time.Now().Add(time.Hour).Unix(),
+			Refresh:      "refresh-token",
+			Expires:      time.Now().Add(-time.Hour).Unix(), // Expired
+		},
+	}, &mockAuth{})
+	if err != nil {
+		t.Fatalf("Error creating authenticator: %v", err)
+	}
+
+	// Create a new request with a API token
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal("Error creating request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer api-token")
+
+	// Method under test
+	authenticated, _, err := a.IsAuthenticated(w, req)
+
+	// Check result
+	assert.NoError(t, err)
+	assert.False(t, authenticated)
 }
