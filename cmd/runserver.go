@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/api/auth"
-	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
-	"github.com/EO-DataHub/eodhp-auth-agent/api/tokens"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/auth"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/tokens"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"

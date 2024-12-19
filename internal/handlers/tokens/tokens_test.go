@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
+	v1 "github.com/EO-DataHub/eodhp-auth-agent/api/v1"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -100,7 +101,7 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
-	var response []GetTokenResponse
+	var response []v1.GetTokenResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +162,7 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	// Parse the response body
-	var response CreateTokenResponse
+	var response v1.CreateTokenResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +232,7 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, w.Code)
 
 	// Parse the response body
-	var response CreateTokenResponse
+	var response v1.CreateTokenResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatal(err)
@@ -378,7 +379,7 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
-	var response GetTokenResponse
+	var response v1.GetTokenResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatal(err)
@@ -481,7 +482,7 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
-	var response []GetTokenResponse
+	var response []v1.GetTokenResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatal(err)

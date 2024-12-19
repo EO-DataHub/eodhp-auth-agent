@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/api/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

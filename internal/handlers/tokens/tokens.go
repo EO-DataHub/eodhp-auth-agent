@@ -5,34 +5,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/api/middleware"
+	v1 "github.com/EO-DataHub/eodhp-auth-agent/api/v1"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
-
-type GetTokenResponse struct {
-	ID      string `json:"id"`
-	UserID  string `json:"user_id"`
-	Name    string `json:"name"`
-	Scope   string `json:"scope"`
-	Expiry  string `json:"expiry"`
-	Created string `json:"created"`
-}
-
-type CreateTokenRequest struct {
-	Name    string `json:"name"`
-	Scope   string `json:"scope"`
-	Expires int    `json:"expires"`
-}
-
-type CreateTokenResponse struct {
-	GetTokenResponse `json:",inline"`
-	Token            string `json:"token"`
-}
 
 func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -64,9 +45,9 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 
 		// Write the response
 		w.WriteHeader(http.StatusOK)
-		response := make([]GetTokenResponse, len(tokens))
+		response := make([]v1.GetTokenResponse, len(tokens))
 		for i, token := range tokens {
-			response[i] = GetTokenResponse{
+			response[i] = v1.GetTokenResponse{
 				ID:      token.ID,
 				UserID:  token.UserID,
 				Name:    token.Name,
@@ -98,7 +79,7 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		authToken := r.Context().Value(middleware.TokenKey).(string)
 
 		// Get the scope from the payload
-		req := CreateTokenRequest{
+		req := v1.CreateTokenRequest{
 			Expires: 30, // default expiry time is 30 days
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -166,8 +147,8 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 
 		// Write the response
 		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(CreateTokenResponse{
-			GetTokenResponse: GetTokenResponse{
+		json.NewEncoder(w).Encode(v1.CreateTokenResponse{
+			GetTokenResponse: v1.GetTokenResponse{
 				ID:      token.ID,
 				UserID:  token.UserID,
 				Name:    token.Name,
@@ -217,7 +198,7 @@ func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 
 		// Write the response
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(GetTokenResponse{
+		json.NewEncoder(w).Encode(v1.GetTokenResponse{
 			ID:      token.ID,
 			UserID:  token.UserID,
 			Name:    token.Name,
