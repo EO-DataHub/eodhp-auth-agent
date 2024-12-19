@@ -1,6 +1,7 @@
 package tokens
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -107,7 +108,7 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	assert.Equal(t, len(response), 3)
 }
 
-func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
+func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	// Setup Token DB
 	tokenDB := setupTokenDB()
 	defer tokenDB.CloseDB()
@@ -136,8 +137,14 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	handler := CreateTokenHandler(tokenDB, k)
 
 	// Setup request and response
-	r := httptest.NewRequest("POST", "/tokens", nil)
 	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		"name": "test-token",
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
+	r.Header.Set("Content-Type", "application/json")
 	claims := authn.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -162,6 +169,78 @@ func TestCreateTokenHandler_Authenticated_Success(t *testing.T) {
 	assert.NotEqual(t, "", response.ID)
 	assert.NotEqual(t, "", response.Token)
 	assert.Equal(t, userID, response.UserID)
+	assert.Equal(t, payload["name"], response.Name)
+
+	// Check object was created in DB
+	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
+	assert.NoError(t, err)
+	assert.Equal(t, response.ID, dbToken.ID)
+}
+
+func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
+	// Setup Token DB
+	tokenDB := setupTokenDB()
+	defer tokenDB.CloseDB()
+
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := &keycloak.TokenResponse{
+			Access:    "test-access-token",
+			Refresh:   "test-refresh-token",
+			ExpiresIn: 3600,
+		}
+		w.WriteHeader(http.StatusOK)
+		respBody, err := json.Marshal(resp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = w.Write(respBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
+	// Create handler
+	handler := CreateTokenHandler(tokenDB, k)
+
+	// Setup request and response
+	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		"name":  "test-token",
+		"scope": "test-scope",
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
+	r.Header.Set("Content-Type", "application/json")
+	claims := authn.Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: userID,
+		},
+	}
+	token, err := authn.CreateJWTToken(claims, "secret-key")
+	assert.NoError(t, err)
+	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
+	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
+	w := httptest.NewRecorder()
+
+	// Test the handler
+	handler.ServeHTTP(w, r.WithContext(ctx))
+	assert.Equal(t, http.StatusAccepted, w.Code)
+
+	// Parse the response body
+	var response CreateTokenResponse
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.NotEqual(t, "", response.ID)
+	assert.NotEqual(t, "", response.Token)
+	assert.Equal(t, userID, response.UserID)
+	assert.Equal(t, payload["name"], response.Name)
+	assert.Equal(t, payload["scope"], response.Scope)
 
 	// Check object was created in DB
 	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
@@ -197,8 +276,13 @@ func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
 	handler := CreateTokenHandler(tokenDB, k)
 
 	// Setup request and response
-	r := httptest.NewRequest("POST", "/tokens", nil)
 	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		"name": "test-token",
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	claims := authn.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -213,6 +297,44 @@ func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
 	// Test the handler
 	handler.ServeHTTP(w, r.WithContext(ctx))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestCreateTokenHandler_InvalidRequest_BadRequest(t *testing.T) {
+	// Setup Token DB
+	tokenDB := setupTokenDB()
+	defer tokenDB.CloseDB()
+
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
+	// Create handler
+	handler := CreateTokenHandler(tokenDB, k)
+
+	// Setup request and response
+	userID := "ABCDEFG-12345678"
+	payload := map[string]any{
+		// missing "name" field
+	}
+	body, err := json.Marshal(payload)
+	assert.NoError(t, err)
+	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
+	claims := authn.Claims{
+		StandardClaims: jwt.StandardClaims{
+			Subject: userID,
+		},
+	}
+	token, err := authn.CreateJWTToken(claims, "secret-key")
+	assert.NoError(t, err)
+	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
+	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
+	w := httptest.NewRecorder()
+
+	// Test the handler
+	handler.ServeHTTP(w, r.WithContext(ctx))
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
@@ -230,6 +352,10 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -259,6 +385,8 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	}
 	assert.Equal(t, tokenID, response.ID)
 	assert.Equal(t, userID, response.UserID)
+	assert.Equal(t, "test-1", response.Name)
+	assert.Equal(t, "scope-1", response.Scope)
 }
 
 func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
@@ -276,11 +404,22 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
 	// Create handler
-	handler := DeleteTokenHandler(d)
+	handler := DeleteTokenHandler(d, k)
 
 	// Setup request and response
 	r := httptest.NewRequest("DELETE", fmt.Sprintf("/tokens/%s", tokenID), nil)
@@ -317,6 +456,10 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 		Access:       "test-access-4",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-4",
+		Name:         "test-4",
+		Scope:        "scope-4",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -361,6 +504,10 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
@@ -398,11 +545,22 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 
+	// Setup auth server response for Keycloak Client
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	server, k := setupKeycloakClient(h)
+	defer server.Close()
+
 	// Create handler
-	handler := DeleteTokenHandler(d)
+	handler := DeleteTokenHandler(d, k)
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
@@ -435,6 +593,10 @@ func TestGetTokenHandler_NotAuthenticated_Unauthorized(t *testing.T) {
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
+		Name:         "test-1",
+		Scope:        "scope-1",
+		Expires:      time.Now().Add(time.Hour * 24).Unix(),
+		Created:      time.Now().Unix(),
 	})
 	assert.NoError(t, err)
 

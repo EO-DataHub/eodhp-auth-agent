@@ -86,7 +86,7 @@ func (k KeycloakClient) RefreshToken(refreshToken string) (*TokenResponse,
 	return &tokenResponse, nil
 }
 
-func (k KeycloakClient) GetOfflineToken(accessToken string) (*TokenResponse,
+func (k KeycloakClient) ExchangeToken(accessToken, scope string) (*TokenResponse,
 	error) {
 
 	data := url.Values{}
@@ -94,7 +94,7 @@ func (k KeycloakClient) GetOfflineToken(accessToken string) (*TokenResponse,
 	data.Set("client_secret", k.ClientSecret)
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
 	data.Set("subject_token", accessToken)
-	data.Set("scope", "offline_access")
+	data.Set("scope", scope)
 
 	resp, err := k.http.PostForm(
 		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token",
@@ -205,4 +205,28 @@ func (k KeycloakClient) ImpersonateUser(accessToken, subject string) (
 	}
 
 	return &tokenResponse, nil
+}
+
+func (k KeycloakClient) RevokeToken(refreshToken string) error {
+
+	data := url.Values{}
+	data.Set("client_id", k.ClientID)
+	data.Set("client_secret", k.ClientSecret)
+	data.Set("token", refreshToken)
+	data.Set("token_type_hint", "refresh_token")
+
+	resp, err := k.http.PostForm(
+		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/revoke",
+			k.KeycloakURL, k.Realm), data)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return &HTTPError{Message: string(bodyBytes), Status: resp.StatusCode}
+	}
+
+	return nil
 }

@@ -21,11 +21,19 @@ type Token struct {
 	Access       string
 	AccessExpiry int64
 	Refresh      string
+	Name         string
+	Scope        string
+	Expires      int64
+	Created      int64
 }
 
-func (t Token) IsValid() bool {
+func (t Token) RequiresRefresh() bool {
 	// Include a 5 second buffer to account for any latency
-	return time.Now().Add(5*time.Second).Unix() < t.AccessExpiry
+	return time.Now().Add(5*time.Second).Unix() > t.AccessExpiry
+}
+
+func (t Token) IsExpired() bool {
+	return time.Now().Unix() > t.Expires
 }
 
 var ErrNotFound = errors.New("db: not found")
@@ -94,11 +102,15 @@ func (t TokenDB) InitDB() error {
 	_, err = t.db.Exec(
 		`CREATE TABLE IF NOT EXISTS tokens (
 			id UUID PRIMARY KEY,
+			name TEXT NOT NULL,
 			token TEXT NOT NULL UNIQUE,
 			user_id UUID NOT NULL,
 			access TEXT NOT NULL,
 			access_expiry INT NOT NULL,
-			refresh TEXT NOT NULL
+			refresh TEXT NOT NULL,
+			expires INT NOT NULL,
+			scope TEXT NOT NULL,
+			created INT NOT NULL
 		)`)
 	if err != nil {
 		t.log.Error().Err(err).Msg("failed to create token table")
@@ -137,9 +149,10 @@ func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
 		UserID: userID,
 	}
 	err := t.db.QueryRow(
-		`SELECT access, access_expiry, refresh
+		`SELECT access, access_expiry, refresh, name, scope, expires, created
 		FROM tokens WHERE id = $1 AND user_id = $2`, id, userID).
-		Scan(&token.Access, &token.AccessExpiry, &token.Refresh)
+		Scan(&token.Access, &token.AccessExpiry, &token.Refresh, &token.Name,
+			&token.Scope, &token.Expires, &token.Created)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Warn().Err(ErrNotFound).Msg("token not found")
@@ -166,10 +179,11 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	var cypherAccess *string
 	var cypherRefresh *string
 	err := t.db.QueryRow(
-		`SELECT id, user_id, access, access_expiry, refresh
-		FROM tokens WHERE token = $1`, hashToken).
+		`SELECT id, user_id, access, access_expiry, refresh, name, scope, 
+		expires, created FROM tokens WHERE token = $1`, hashToken).
 		Scan(&token.ID, &token.UserID, &cypherAccess, &token.AccessExpiry,
-			&cypherRefresh)
+			&cypherRefresh, &token.Name, &token.Scope, &token.Expires,
+			&token.Created)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Warn().Err(ErrNotFound).Msg("token not found")
@@ -215,10 +229,11 @@ func (t TokenDB) CreateToken(token Token) error {
 	}
 
 	_, err = t.db.Exec(
-		`INSERT INTO tokens (id, token, user_id, access, access_expiry, refresh) 
-		VALUES ($1, $2, $3, $4, $5, $6)`,
+		`INSERT INTO tokens (id, token, user_id, access, access_expiry, refresh,
+		name, scope, expires, created) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		token.ID, hashToken, token.UserID, cypherAccess, token.AccessExpiry,
-		cypherRefresh)
+		cypherRefresh, token.Name, token.Scope, token.Expires, token.Created)
 	if err != nil {
 		t.log.Err(err).Msg("failed to create token")
 		return err
@@ -248,9 +263,8 @@ func (t TokenDB) UpdateToken(token Token) error {
 
 	_, err = t.db.Exec(
 		`UPDATE tokens SET access = $1, access_expiry = $2, refresh = $3
-		WHERE token = $4 AND user_id = $5`,
-		cypherAccess, token.AccessExpiry, cypherRefresh, hashToken,
-		token.UserID)
+		WHERE token = $4`,
+		cypherAccess, token.AccessExpiry, cypherRefresh, hashToken)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Warn().Err(ErrNotFound).Msg("token not found")
@@ -270,7 +284,7 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 	var tokens []*Token
 
 	rows, err := t.db.Query(
-		`SELECT id, access_expiry
+		`SELECT id, access_expiry, name, scope, expires, created
 		FROM tokens WHERE user_id = $1`, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -285,7 +299,8 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 		token := &Token{
 			UserID: userID,
 		}
-		err := rows.Scan(&token.ID, &token.AccessExpiry)
+		err := rows.Scan(&token.ID, &token.AccessExpiry, &token.Name,
+			&token.Scope, &token.Expires, &token.Created)
 		if err != nil {
 			t.log.Err(err).Msg("failed to scan token")
 			return nil, err

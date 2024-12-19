@@ -53,7 +53,7 @@ var runServerCmd = &cobra.Command{
 		r.HandleFunc("/tokens/{token_id}", middleware(tokens.GetTokenHandler(
 			tokenDB))).Methods(http.MethodGet)
 		r.HandleFunc("/tokens/{token_id}", middleware(tokens.DeleteTokenHandler(
-			tokenDB))).Methods(http.MethodDelete)
+			tokenDB, kcClient))).Methods(http.MethodDelete)
 
 		// Start the server
 		fmt.Printf("starting server on %s:%d\n", host, port)
