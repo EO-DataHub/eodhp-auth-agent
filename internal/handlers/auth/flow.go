@@ -92,6 +92,7 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 			Host:     host,
 			Path:     req.Header.Get(OriginalURI),
 			Roles:    claims.RealmAccess.Roles,
+			Method:   req.Method,
 		},
 	})
 	if err != nil {
