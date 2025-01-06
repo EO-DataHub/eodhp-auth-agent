@@ -11,6 +11,7 @@ import (
 
 const OriginalHost = "X-Original-Host"
 const OriginalURI = "X-Original-URI"
+const OriginalMethod = "X-Original-Method"
 
 type AuthFlowInputs struct {
 	Name              string   `yaml:"name"`
@@ -86,12 +87,14 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 			OriginalHost)
 		host = req.Host
 	}
+
 	isAuthorized, err := a.authz.IsAuthorized(req, authz.OPARequestBody{
 		Input: authz.OPARequestBodyInput{
 			Username: claims.Username,
 			Host:     host,
 			Path:     req.Header.Get(OriginalURI),
 			Roles:    claims.RealmAccess.Roles,
+			Method:   req.Header.Get(OriginalMethod),
 		},
 	})
 	if err != nil {
