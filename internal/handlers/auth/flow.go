@@ -11,6 +11,7 @@ import (
 
 const OriginalHost = "X-Original-Host"
 const OriginalURI = "X-Original-URI"
+const OriginalMethod = "X-Original-Method"
 
 type AuthFlowInputs struct {
 	Name              string   `yaml:"name"`
@@ -93,7 +94,7 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 			Host:     host,
 			Path:     req.Header.Get(OriginalURI),
 			Roles:    claims.RealmAccess.Roles,
-			Method:   req.Header.Get("X-Original-Method"),
+			Method:   req.Header.Get(OriginalMethod),
 		},
 	})
 	if err != nil {
