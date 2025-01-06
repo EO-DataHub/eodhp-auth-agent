@@ -1,5 +1,9 @@
 # Auth Agent
 
+## v0.2.2 (06-01-2025)
+
+- Added support for forwarding the original HTTP method using the X-Original-Method to pass as an input to the OPA policy.
+
 ## v0.2.0 (05-09-2024)
 
 - Refactored authenticators and authorizers into configurable flows that can be mapped to host domains
