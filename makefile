@@ -2,7 +2,7 @@
 go ?= go
 docker ?= docker
 image ?= public.ecr.aws/n1b3o1k2/eodhp-auth-agent
-version ?= 0.2.2
+version ?= 0.3.0
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
