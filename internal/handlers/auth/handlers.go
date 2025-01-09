@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/rs/zerolog"
 )
@@ -51,20 +51,36 @@ func AuthHandler(flows []AuthProcessor) http.HandlerFunc {
 	}
 }
 
-func InspectTokenHandler(auth *keycloak.KeycloakClient) http.HandlerFunc {
+func IntrospectAuthHandler(auth *keycloak.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
-			Str("handler", "inspect token").Logger()
+			Str("handler", "introspect auth").Logger()
 
-		// Get the token from the context
-		authToken := r.Context().Value(middleware.TokenKey).(string)
+		// Get the Authorization header
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			logger.Debug().Msg("authorization header missing")
+			http.Error(w, "authorization header missing",
+				http.StatusBadRequest)
+			return
+		}
+
+		// Check the Authorization header format
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token == authHeader {
+			logger.Error().Msg("invalid auth header format, should be bearer")
+			http.Error(w, "invalid auth header format, should be bearer",
+				http.StatusBadRequest)
+			return
+		}
 
 		// Inspect the token
-		claims, err := auth.IntrospectToken(authToken)
+		claims, err := auth.IntrospectToken(token)
 		if err != nil {
-			logger.Error().Err(err).Msg("Failed to inspect token")
-			http.Error(w, "Failed to inspect token", http.StatusUnauthorized)
+			logger.Error().Err(err).Msg("failed to introspect auth")
+			http.Error(w, fmt.Errorf("failed to introspect auth: %w", err).Error(),
+				http.StatusInternalServerError)
 			return
 		}
 

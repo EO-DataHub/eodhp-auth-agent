@@ -34,8 +34,9 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Check the Authorization header format
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		if token == authHeader {
-			logger.Error().Msg("invalid token format")
-			http.Error(w, "invalid token format", http.StatusUnauthorized)
+			logger.Error().Msg("invalid auth header format, should be bearer")
+			http.Error(w, "invalid auth header format, should be bearer",
+				http.StatusUnauthorized)
 			return
 		}
 

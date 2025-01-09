@@ -1,13 +1,11 @@
 package auth
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/stretchr/testify/assert"
 )
@@ -172,15 +170,15 @@ func TestInspectTokenHandler_ValidToken_Success(t *testing.T) {
 	})
 
 	// Create handler
-	handler := InspectTokenHandler(k)
+	handler := IntrospectAuthHandler(k)
 
 	// Setup request and response
 	r := httptest.NewRequest("POST", "/introspect", nil)
-	ctx := context.WithValue(r.Context(), middleware.TokenKey, "accesstoken")
+	r.Header.Set("Authorization", "Bearer accesstoken")
 	w := httptest.NewRecorder()
 
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
