@@ -1,10 +1,14 @@
 package auth
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -144,4 +148,49 @@ func TestAuthHandler_FirstAuthnAndAuthz_OK(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.True(t, flows[0].(*AuthFlowMock).called)
 	assert.False(t, flows[1].(*AuthFlowMock).called)
+}
+
+func TestInspectTokenHandler_ValidToken_Success(t *testing.T) {
+	// Setup auth server response for Keycloak Client
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`
+				{
+					"username": "jbloggs",
+					"active": true
+				}
+			`))
+		}))
+	defer server.Close()
+
+	k := keycloak.NewKeycloakClient(keycloak.KeycloakClientInputs{
+		KeycloakURL:  server.URL,
+		Realm:        "test",
+		ClientID:     "myclient",
+		ClientSecret: "mysecret",
+	})
+
+	// Create handler
+	handler := InspectTokenHandler(k)
+
+	// Setup request and response
+	r := httptest.NewRequest("POST", "/introspect", nil)
+	ctx := context.WithValue(r.Context(), middleware.TokenKey, "accesstoken")
+	w := httptest.NewRecorder()
+
+	// Test the handler
+	handler.ServeHTTP(w, r.WithContext(ctx))
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Parse the response body
+	var response keycloak.KeycloakResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.NoError(t, err)
+	assert.NotNil(t, response)
+	assert.Equal(t, response["username"], "jbloggs")
+	assert.Equal(t, response["active"], true)
 }

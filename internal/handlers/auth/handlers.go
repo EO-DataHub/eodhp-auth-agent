@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/rs/zerolog"
 )
 
@@ -45,5 +48,28 @@ func AuthHandler(flows []AuthProcessor) http.HandlerFunc {
 		}
 		w.Write([]byte(fmt.Sprintf("Authenticated: %t, Authorized: %t",
 			isAuthenticated, isAuthorized)))
+	}
+}
+
+func InspectTokenHandler(auth *keycloak.KeycloakClient) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger := zerolog.Ctx(r.Context()).With().
+			Str("handler", "inspect token").Logger()
+
+		// Get the token from the context
+		authToken := r.Context().Value(middleware.TokenKey).(string)
+
+		// Inspect the token
+		claims, err := auth.IntrospectToken(authToken)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to inspect token")
+			http.Error(w, "Failed to inspect token", http.StatusUnauthorized)
+			return
+		}
+
+		// Write the response
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(claims)
 	}
 }
