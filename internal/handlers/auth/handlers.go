@@ -85,6 +85,7 @@ func IntrospectAuthHandler(auth *keycloak.KeycloakClient) http.HandlerFunc {
 		}
 
 		// Write the response
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(claims)
 	}
