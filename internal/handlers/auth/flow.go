@@ -60,7 +60,9 @@ func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
 			OPAClientURL: inputs.AuthorizationURL,
 		})
 	} else {
-		authorizer = NullAuthZ{}
+		authorizer = NullAuthZ{
+			Name: inputs.Name,
+		}
 	}
 
 	return &AuthFlow{
@@ -116,10 +118,16 @@ func (a AuthFlow) IsHostAllowed(host string) bool {
 	return false
 }
 
-type NullAuthZ struct{}
+type NullAuthZ struct {
+	Name string
+}
 
-func (n NullAuthZ) IsAuthorized(req *http.Request, body authz.OPARequestBody) (
+func (a NullAuthZ) IsAuthorized(r *http.Request, body authz.OPARequestBody) (
 	bool, error) {
 
-	return true, nil
+	logger := zerolog.Ctx(r.Context()).With().Str("authorizer", a.Name).Logger()
+	result := true
+	logger.Debug().Interface("authz request", body).Bool("result",
+		result).Msg("authorization response received")
+	return result, nil
 }
