@@ -59,6 +59,8 @@ func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
 			Name:         inputs.Name,
 			OPAClientURL: inputs.AuthorizationURL,
 		})
+	} else {
+		authorizer = NullAuthZ{}
 	}
 
 	return &AuthFlow{
@@ -112,4 +114,12 @@ func (a AuthFlow) IsHostAllowed(host string) bool {
 		}
 	}
 	return false
+}
+
+type NullAuthZ struct{}
+
+func (n NullAuthZ) IsAuthorized(req *http.Request, body authz.OPARequestBody) (
+	bool, error) {
+
+	return true, nil
 }
