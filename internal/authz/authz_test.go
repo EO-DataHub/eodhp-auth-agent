@@ -32,8 +32,7 @@ func TestIsAuthorized_Authorized(t *testing.T) {
 
 	isAuthorized, err := a.IsAuthorized(req, OPARequestBody{
 		Input: OPARequestBodyInput{
-			Username: "test-user",
-			Roles:    []string{"test-role"},
+			Authenticated: true,
 		},
 	})
 	if err != nil {
@@ -69,8 +68,7 @@ func TestIsAuthorized_Unauthorized(t *testing.T) {
 
 	isAuthorized, err := a.IsAuthorized(req, OPARequestBody{
 		Input: OPARequestBodyInput{
-			Username: "test-user",
-			Roles:    []string{"test-role"},
+			Authenticated: true,
 		},
 	})
 	if err != nil {

@@ -13,13 +13,9 @@ import (
 
 func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims := r.Context().Value(ClaimsKey).(authn.Claims)
+		claims := r.Context().Value(ClaimsKey).(Claims)
 		// Test claims
 		assert.Equal(t, "abcd-1234", claims.Subject)
-		assert.Equal(t, "testuser", claims.Username)
-		assert.Equal(t, 2, len(claims.RealmAccess.Roles))
-		assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
-		assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -27,15 +23,9 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jwtToken, err := authn.CreateJWTToken(authn.Claims{
+	jwtToken, err := authn.CreateJWTToken(Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: "abcd-1234",
-		},
-		Username: "testuser",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test_role_1", "test_role_2"},
 		},
 	}, "secret")
 	if err != nil {
@@ -50,9 +40,8 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 
 func TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		claims := r.Context().Value(ClaimsKey).(authn.Claims)
+		claims := r.Context().Value(ClaimsKey).(Claims)
 		// Test claims
-		assert.Equal(t, "", claims.Subject)
 		if claims.Subject == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return

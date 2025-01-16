@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/rs/zerolog"
 )
 
@@ -13,11 +14,11 @@ type OPARequestBody struct {
 }
 
 type OPARequestBodyInput struct {
-	Username string   `json:"username"`
-	Host     string   `json:"host"`
-	Path     string   `json:"path"`
-	Roles    []string `json:"roles"`
-	Method   string   `json:"method"`
+	Authenticated bool         `json:"authenticated"`
+	Host          string       `json:"host"`
+	Path          string       `json:"path"`
+	Method        string       `json:"method"`
+	Claims        authn.Claims `json:"claims"`
 }
 
 type opaResponseBody struct {
