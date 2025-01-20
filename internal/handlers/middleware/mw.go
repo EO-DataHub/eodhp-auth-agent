@@ -7,12 +7,16 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
+	"github.com/golang-jwt/jwt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type contextKey string
 type tokenKey string
+type Claims struct {
+	jwt.StandardClaims
+}
 
 const ClaimsKey contextKey = "claims"
 const TokenKey tokenKey = "token"
@@ -34,19 +38,21 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Check the Authorization header format
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		if token == authHeader {
-			logger.Error().Msg("invalid token format")
-			http.Error(w, "invalid token format", http.StatusUnauthorized)
+			logger.Error().Msg("invalid auth header format, should be bearer")
+			http.Error(w, "invalid auth header format, should be bearer",
+				http.StatusUnauthorized)
 			return
 		}
 
 		// Parse the token for JWT claims
-		claims, err := authn.ParseClaims(token)
+		claims := Claims{}
+		err := authn.ParseClaims(token, &claims)
 		if err != nil {
 			logger.Error().Err(err).Msg("invalid bearer jwt token")
 			http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)
 			return
 		}
-		logger.Debug().Str("user", claims.Username).Msg("token verified")
+		logger.Debug().Str("userid", claims.Subject).Msg("token verified")
 
 		// Add the token and claims to the context
 		ctx := context.WithValue(r.Context(), TokenKey, token)

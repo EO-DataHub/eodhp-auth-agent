@@ -97,8 +97,9 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 	respHeaders.Set("Set-Cookie", resp.Header.Get("Set-Cookie"))
 
 	// Parse the claims from the auth response Authorization header
-	claims, err := ParseClaims(strings.TrimPrefix(
-		w.Header().Get("Authorization"), "Bearer "))
+	claims := Claims{}
+	err = ParseClaims(strings.TrimPrefix(
+		w.Header().Get("Authorization"), "Bearer "), &claims)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to parse claims")
 		return true, claims, err

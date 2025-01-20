@@ -23,7 +23,8 @@ func (a *AuthenticatorMock) IsAuthenticated(w http.ResponseWriter,
 	if a.err != nil {
 		return false, authn.Claims{}, a.err
 	}
-	claims := authn.Claims{Username: "test"}
+	claims := authn.Claims{}
+	claims["username"] = "test"
 	return a.result, claims, nil
 }
 

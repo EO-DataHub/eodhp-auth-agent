@@ -88,7 +88,7 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", "/tokens", nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -146,7 +146,7 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", "application/json")
-	claims := authn.Claims{
+	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -216,7 +216,7 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", "application/json")
-	claims := authn.Claims{
+	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -284,7 +284,7 @@ func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
 	body, err := json.Marshal(payload)
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
-	claims := authn.Claims{
+	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -322,7 +322,7 @@ func TestCreateTokenHandler_InvalidRequest_BadRequest(t *testing.T) {
 	body, err := json.Marshal(payload)
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
-	claims := authn.Claims{
+	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -365,7 +365,7 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -424,7 +424,7 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("DELETE", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -469,7 +469,7 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", "/tokens", nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -517,7 +517,7 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},
@@ -565,7 +565,7 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &authn.Claims{
+	claims := &middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
 		},

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	v1 "github.com/EO-DataHub/eodhp-auth-agent/api/v1"
-	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
@@ -21,7 +20,7 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 			Str("handler", "list tokens").Logger()
 
 		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
 		if !ok {
 			logger.Error().Msg("No claims found in context")
 			http.Error(w, "No claims found in context", http.StatusUnauthorized)
@@ -68,7 +67,7 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 			Str("handler", "create token").Logger()
 
 		// Get the user ID from the claims
-		claims := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		claims := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
 		if claims.Subject == "" {
 			logger.Error().Msg("No user ID in claims")
 			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
@@ -170,7 +169,7 @@ func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 		tokenID := mux.Vars(r)["token_id"]
 
 		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
 		if !ok {
 			logger.Error().Msg("No claims found in context")
 			http.Error(w, "No claims found in context", http.StatusUnauthorized)
@@ -220,7 +219,7 @@ func DeleteTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		tokenID := mux.Vars(r)["token_id"]
 
 		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
 		if !ok {
 			logger.Error().Msg("No claims found in context")
 			http.Error(w, "No claims found in context", http.StatusUnauthorized)

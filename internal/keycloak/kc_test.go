@@ -96,3 +96,34 @@ func TestGetOfflineToken__OK(t *testing.T) {
 	assert.NotEmpty(t, offlineToken.Refresh, "new_refresh")
 	assert.NotZero(t, offlineToken.ExpiresIn, 3600)
 }
+
+func TestKeycloakClient_InspectToken_OK(t *testing.T) {
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`
+				{
+					"username": "jbloggs",
+					"active": true
+				}
+			`))
+		}))
+	defer server.Close()
+
+	client := &KeycloakClient{
+		KeycloakClientInputs: KeycloakClientInputs{
+			KeycloakURL:  server.URL,
+			Realm:        "test",
+			ClientID:     "myclient",
+			ClientSecret: "mysecret",
+		},
+		http: server.Client(),
+	}
+
+	claims, err := client.IntrospectToken("accesstoken")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, claims)
+	assert.Equal(t, claims["username"], "jbloggs")
+	assert.Equal(t, claims["active"], true)
+}

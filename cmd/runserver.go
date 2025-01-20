@@ -38,9 +38,11 @@ var runServerCmd = &cobra.Command{
 		// Create routes
 		r := mux.NewRouter()
 
-		// The auth route does not use the JWT middleware
+		// The auth routes do not use the JWT middleware
 		r.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(flows))).
 			Methods(http.MethodGet)
+		r.HandleFunc("/auth/introspect", middleware.WithLogger(
+			auth.IntrospectAuthHandler(kcClient))).Methods(http.MethodPost)
 
 		// The CRUD routes all use the same middleware
 		var middleware = func(next http.HandlerFunc) http.HandlerFunc {

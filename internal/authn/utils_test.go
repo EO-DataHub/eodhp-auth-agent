@@ -11,31 +11,22 @@ func TestUnmarshalClaims_Valid(t *testing.T) {
 	data := []byte(`{
 		"exp": 1724746200,
 		"iat": 1724745600,
-		"preferred_username": "test",
-		"realm_access": {
-			"roles": [
-				"test_role_1",
-				"test_role_2"
-			]
-		}
+		"username": "test"
 	}`)
-	c := Claims{}
-	err := json.Unmarshal(data, &c)
+	claims := Claims{}
+	err := json.Unmarshal(data, &claims)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(1724746200), c.ExpiresAt)
-	assert.Equal(t, int64(1724745600), c.IssuedAt)
-	assert.Equal(t, "test", c.Username)
-	assert.Equal(t, "test_role_1", c.RealmAccess.Roles[0])
-	assert.Equal(t, "test_role_2", c.RealmAccess.Roles[1])
+	assert.Equal(t, float64(1724746200), claims["exp"].(float64))
+	assert.Equal(t, float64(1724745600), claims["iat"].(float64))
+	assert.Equal(t, "test", claims["username"])
 }
 
 func TestParseClaims_Valid(t *testing.T) {
-	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjQ3NDYyMDAsImlhdCI6MTcyNDc0NTYwMCwicHJlZmVycmVkX3VzZXJuYW1lIjoidGVzdCIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJ0ZXN0X3JvbGVfMSIsInRlc3Rfcm9sZV8yIl19fQ.hgEEeQ9R_VPkHBTP1Co3PQdwCuNqWzU-UtkYrceHlvs"
-	claims, err := ParseClaims(token)
+	token := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjQ3NDYyMDAsImlhdCI6MTcyNDc0NTYwMCwidXNlcm5hbWUiOiJ0ZXN0In0.Bo2W5yxwru0F4fd1-7Vt9U7ec9jwpCzSxqlJ9uhJMnA"
+	claims := Claims{}
+	err := ParseClaims(token, &claims)
 	assert.NoError(t, err)
-	assert.Equal(t, int64(1724746200), claims.ExpiresAt)
-	assert.Equal(t, int64(1724745600), claims.IssuedAt)
-	assert.Equal(t, "test", claims.Username)
-	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
-	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
+	assert.Equal(t, float64(1724746200), claims["exp"].(float64))
+	assert.Equal(t, float64(1724745600), claims["iat"].(float64))
+	assert.Equal(t, "test", claims["username"])
 }

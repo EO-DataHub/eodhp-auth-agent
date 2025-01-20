@@ -12,7 +12,6 @@ import (
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
-	"github.com/golang-jwt/jwt"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -64,15 +63,8 @@ func (m *mockAuth) RefreshToken(refreshToken string) (*keycloak.TokenResponse,
 func TestIsAuthenticated_ValidBearerToken_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: "abcd-1234",
-		},
-		Username: "testuser",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test_role_1", "test_role_2"},
-		},
+		"sub":      "abcd-1234",
+		"username": "testuser",
 	}, "secret")
 	if err != nil {
 		t.Fatalf("Error creating JWT token: %v", err)
@@ -110,10 +102,7 @@ func TestIsAuthenticated_ValidBearerToken_Authenticated(t *testing.T) {
 	assert.True(t, authenticated)
 	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
 		w.Header().Get("Authorization"))
-	assert.Equal(t, "testuser", claims.Username)
-	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
-	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
-	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
+	assert.Equal(t, "testuser", claims["username"])
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
@@ -122,15 +111,8 @@ func TestIsAuthenticated_ValidBearerToken_Authenticated(t *testing.T) {
 func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: "abcd-1234",
-		},
-		Username: "testuser",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test_role_1", "test_role_2"},
-		},
+		"sub":      "abcd-1234",
+		"username": "testuser",
 	}, "secret")
 	if err != nil {
 		t.Fatalf("Error creating JWT token: %v", err)
@@ -183,10 +165,7 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 	assert.True(t, authenticated)
 	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
 		w.Header().Get("Authorization"))
-	assert.Equal(t, "testuser", claims.Username)
-	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
-	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
-	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
+	assert.Equal(t, "testuser", claims["username"])
 	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
@@ -195,15 +174,8 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 func TestIsAuthenticated_AccessTokenRequiresRefresh_Authenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: "abcd-1234",
-		},
-		Username: "testuser",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test_role_1", "test_role_2"},
-		},
+		"sub":      "abcd-1234",
+		"username": "testuser",
 	}, "secret")
 	if err != nil {
 		t.Fatalf("Error creating JWT token: %v", err)
@@ -262,10 +234,7 @@ func TestIsAuthenticated_AccessTokenRequiresRefresh_Authenticated(t *testing.T) 
 	assert.True(t, authenticated)
 	assert.Equal(t, fmt.Sprintf("Bearer %s", token),
 		w.Header().Get("Authorization"))
-	assert.Equal(t, "testuser", claims.Username)
-	assert.Equal(t, 2, len(claims.RealmAccess.Roles))
-	assert.Equal(t, "test_role_1", claims.RealmAccess.Roles[0])
-	assert.Equal(t, "test_role_2", claims.RealmAccess.Roles[1])
+	assert.Equal(t, "testuser", claims["username"])
 	assert.True(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.True(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.True(t, a.auth.(*mockAuth).refreshCalled)
@@ -295,15 +264,12 @@ func TestIsAuthenticated_NoAuth_Unauthenticated(t *testing.T) {
 	}
 
 	// Method under test
-	authenticated, claims, err := a.IsAuthenticated(w, req)
+	authenticated, _, err := a.IsAuthenticated(w, req)
 
 	// Check result
 	assert.NoError(t, err)
 	assert.False(t, authenticated)
 	assert.Equal(t, "", w.Header().Get("Authorization"))
-	assert.Equal(t, claims.Subject, "")
-	assert.Equal(t, claims.Username, "")
-	assert.Equal(t, len(claims.RealmAccess.Roles), 0)
 	assert.False(t, a.tokenDB.(*mockTokens).getCalled)
 	assert.False(t, a.tokenDB.(*mockTokens).updateCalled)
 	assert.False(t, a.auth.(*mockAuth).refreshCalled)
@@ -312,15 +278,8 @@ func TestIsAuthenticated_NoAuth_Unauthenticated(t *testing.T) {
 func TestIsAuthenticated_ExpiredAPIToken_Unauthenticated(t *testing.T) {
 	// Create a valid auth response bearer token
 	token, err := CreateJWTToken(Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: "abcd-1234",
-		},
-		Username: "testuser",
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: []string{"test_role_1", "test_role_2"},
-		},
+		"sub":      "abcd-1234",
+		"username": "testuser",
 	}, "secret")
 	if err != nil {
 		t.Fatalf("Error creating JWT token: %v", err)

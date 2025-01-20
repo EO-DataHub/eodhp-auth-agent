@@ -35,6 +35,8 @@ type KeycloakError struct {
 	ErrorDescription string `json:"error_description"`
 }
 
+type KeycloakResponse = map[string]any
+
 func (e *HTTPError) Error() string {
 	return e.Message
 }
@@ -229,4 +231,34 @@ func (k KeycloakClient) RevokeToken(refreshToken string) error {
 	}
 
 	return nil
+}
+
+func (k KeycloakClient) IntrospectToken(token string) (KeycloakResponse, error) {
+
+	data := url.Values{}
+	data.Set("client_id", k.ClientID)
+	data.Set("client_secret", k.ClientSecret)
+	data.Set("token", token)
+
+	resp, err := k.http.PostForm(
+		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token/introspect",
+			k.KeycloakURL, k.Realm), data)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &HTTPError{Message: string(body), Status: resp.StatusCode}
+	}
+
+	// Extract claims from response body
+	body, _ := io.ReadAll(resp.Body)
+	claims := KeycloakResponse{}
+	if err := json.Unmarshal(body, &claims); err != nil {
+		return nil, err
+	}
+
+	return claims, nil
 }
