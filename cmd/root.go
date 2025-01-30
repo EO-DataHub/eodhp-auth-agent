@@ -59,7 +59,7 @@ func setUp() *db.TokenDB {
 
 	fmt.Println("config loaded")
 	fmt.Println("\nauth flows:")
-	for _, flow := range config.AuthFlows {
+	for _, flow := range config.AuthStrategies {
 		fmt.Printf("- name: %s\n", flow.Name)
 		fmt.Printf("  domains: %s\n", flow.Domains)
 		fmt.Printf("  authentication url: %s\n", flow.AuthenticationURL)
@@ -82,10 +82,10 @@ func setUp() *db.TokenDB {
 }
 
 type Config struct {
-	AuthFlows []auth.AuthFlowInputs         `yaml:"flows"`
-	Keycloak  keycloak.KeycloakClientInputs `yaml:"keycloak"`
-	Database  databaseConfig                `yaml:"database"`
-	APIToken  db.TokenDBInputs              `yaml:"api_token"`
+	AuthStrategies []auth.AuthStrategyInputs     `yaml:"flows"`
+	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
+	Database       databaseConfig                `yaml:"database"`
+	APIToken       db.TokenDBInputs              `yaml:"api_token"`
 }
 
 type databaseConfig struct {

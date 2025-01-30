@@ -50,8 +50,8 @@ func TestProcessRequest_AuthnAndAuthz_OK(t *testing.T) {
 	authorizer := &AuthorizerMock{result: true}
 
 	// Create the flow
-	flow := AuthFlow{
-		AuthFlowInputs: AuthFlowInputs{
+	flow := AuthStrategy{
+		AuthStrategyInputs: AuthStrategyInputs{
 			Name: "test",
 		},
 		authn: authenticator,
@@ -78,8 +78,8 @@ func TestProcessRequest_NoAuthnAndAuthz_Unauthorized(t *testing.T) {
 	authorizer := &AuthorizerMock{result: true}
 
 	// Create the flow
-	flow := AuthFlow{
-		AuthFlowInputs: AuthFlowInputs{
+	flow := AuthStrategy{
+		AuthStrategyInputs: AuthStrategyInputs{
 			Name: "test",
 		},
 		authn: authenticator,
@@ -106,8 +106,8 @@ func TestProcessRequest_AuthnAndNoAuthz_Forbidden(t *testing.T) {
 	authorizer := &AuthorizerMock{result: false}
 
 	// Create the flow
-	flow := AuthFlow{
-		AuthFlowInputs: AuthFlowInputs{
+	flow := AuthStrategy{
+		AuthStrategyInputs: AuthStrategyInputs{
 			Name: "test",
 		},
 		authn: authenticator,
@@ -134,8 +134,8 @@ func TestProcessRequest_NoAuthnAndNoAuthz_Unauthorized(t *testing.T) {
 	authorizer := &AuthorizerMock{result: false}
 
 	// Create the flow
-	flow := AuthFlow{
-		AuthFlowInputs: AuthFlowInputs{
+	flow := AuthStrategy{
+		AuthStrategyInputs: AuthStrategyInputs{
 			Name: "test",
 		},
 		authn: authenticator,
@@ -158,7 +158,7 @@ func TestProcessRequest_NoAuthnAndNoAuthz_Unauthorized(t *testing.T) {
 
 func TestIsHostAllowed_AllowedSpecific_True(t *testing.T) {
 	// Create a new authenticator
-	a, err := NewAuthFlow(AuthFlowInputs{
+	a, err := NewAuthStrategy(AuthStrategyInputs{
 		Domains: []string{"test.com", "*.test.com"},
 	}, nil, nil)
 	if err != nil {
@@ -171,7 +171,7 @@ func TestIsHostAllowed_AllowedSpecific_True(t *testing.T) {
 
 func TestIsHostAllowed_AllowedWildcard_True(t *testing.T) {
 	// Create a new authenticator
-	a, err := NewAuthFlow(AuthFlowInputs{
+	a, err := NewAuthStrategy(AuthStrategyInputs{
 		Domains: []string{"*"},
 	}, nil, nil)
 	if err != nil {
@@ -184,7 +184,7 @@ func TestIsHostAllowed_AllowedWildcard_True(t *testing.T) {
 
 func TestIsHostAllowed_NotAllowed_False(t *testing.T) {
 	// Create a new authenticator
-	a, err := NewAuthFlow(AuthFlowInputs{
+	a, err := NewAuthStrategy(AuthStrategyInputs{
 		Domains: []string{"test.com", "*.test.com"},
 	}, nil, nil)
 	if err != nil {
@@ -197,7 +197,7 @@ func TestIsHostAllowed_NotAllowed_False(t *testing.T) {
 
 func TestIsHostAllowed_HostAllowedPartialWildcard_True(t *testing.T) {
 	// Create a new authenticator
-	a, err := NewAuthFlow(AuthFlowInputs{
+	a, err := NewAuthStrategy(AuthStrategyInputs{
 		Domains: []string{"test.com", "*.test.com"},
 	}, nil, nil)
 	if err != nil {

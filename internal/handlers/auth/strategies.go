@@ -13,11 +13,12 @@ const OriginalHost = "X-Original-Host"
 const OriginalURI = "X-Original-URI"
 const OriginalMethod = "X-Original-Method"
 
-type AuthFlowInputs struct {
-	Name              string   `yaml:"name"`
-	Domains           []string `yaml:"domains"`
-	AuthenticationURL string   `yaml:"authentication_url"`
-	AuthorizationURL  string   `yaml:"authorization_url"`
+type AuthStrategyInputs struct {
+	Name                    string   `yaml:"name"`
+	Domains                 []string `yaml:"domains"`
+	AuthenticationURL       string   `yaml:"authentication_url"`
+	AuthorizationURL        string   `yaml:"authorization_url"`
+	AccessTokenExpiryMargin int16    `yaml:"access_token_expiry_margin"`
 }
 
 type Authenticator interface {
@@ -28,15 +29,15 @@ type Authorizer interface {
 	IsAuthorized(req *http.Request, body authz.OPARequestBody) (bool, error)
 }
 
-type AuthFlow struct {
-	AuthFlowInputs
+type AuthStrategy struct {
+	AuthStrategyInputs
 	hostPatterns []regexp.Regexp
 	authn        Authenticator
 	authz        Authorizer
 }
 
-func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
-	auth authn.AuthClient) (*AuthFlow, error) {
+func NewAuthStrategy(inputs AuthStrategyInputs, tokenDB authn.TokenDB,
+	auth authn.AuthClient) (*AuthStrategy, error) {
 
 	var err error
 
@@ -65,15 +66,15 @@ func NewAuthFlow(inputs AuthFlowInputs, tokenDB authn.TokenDB,
 		}
 	}
 
-	return &AuthFlow{
-		AuthFlowInputs: inputs,
-		hostPatterns:   compileGlobPatterns(inputs.Domains),
-		authn:          authenticator,
-		authz:          authorizer,
+	return &AuthStrategy{
+		AuthStrategyInputs: inputs,
+		hostPatterns:       compileGlobPatterns(inputs.Domains),
+		authn:              authenticator,
+		authz:              authorizer,
 	}, nil
 }
 
-func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
+func (a AuthStrategy) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	bool, bool) {
 
 	logger := zerolog.Ctx(req.Context())
@@ -108,7 +109,7 @@ func (a AuthFlow) ProcessRequest(w http.ResponseWriter, req *http.Request) (
 	return isAuthenticated, isAuthorized
 }
 
-func (a AuthFlow) IsHostAllowed(host string) bool {
+func (a AuthStrategy) IsHostAllowed(host string) bool {
 	for _, pattern := range a.hostPatterns {
 		matched := pattern.Match([]byte(host))
 		if matched {
