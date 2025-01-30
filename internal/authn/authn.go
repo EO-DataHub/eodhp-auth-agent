@@ -154,7 +154,7 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 
 	// Check token access expiry
 	if a.tokenDB.AccessTokenRequiresRefresh(*token) {
-		// Access token has expired, refresh it
+		// Access token has, or will soon, expire. Refresh it.
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)

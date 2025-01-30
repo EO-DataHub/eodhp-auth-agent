@@ -69,7 +69,9 @@ func setUp() *db.TokenDB {
 	fmt.Printf("realm: %s\n", config.Keycloak.Realm)
 	fmt.Printf("client id: %s\n", config.Keycloak.ClientID)
 	fmt.Printf("database driver: %s\n", config.Database.Driver)
-	fmt.Printf("api prefix: %s\n\n", config.APIToken.Prefix)
+	fmt.Printf("api prefix: %s\n", config.APIToken.Prefix)
+	fmt.Printf("access token expiry margin: %d\n\n",
+		config.APIToken.AccessTokenExpiryMargin)
 
 	// Create the database client
 	tokenDB := db.NewTokenDB(config.APIToken)
