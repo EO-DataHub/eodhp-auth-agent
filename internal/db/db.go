@@ -43,9 +43,9 @@ type TokenDB struct {
 }
 
 type TokenDBInputs struct {
-	Prefix                  string        `yaml:"prefix"`
-	Secret                  string        `yaml:"secret"`
-	AccessTokenExpiryMargin time.Duration `yaml:"access_token_expiry_margin"`
+	Prefix                  string `yaml:"prefix"`
+	Secret                  string `yaml:"secret"`
+	AccessTokenExpiryMargin int16  `yaml:"access_token_expiry_margin"`
 }
 
 func NewTokenDB(inputs TokenDBInputs) *TokenDB {
@@ -350,5 +350,7 @@ func (t TokenDB) GenerateAPIToken() (string, error) {
 }
 
 func (t TokenDB) AccessTokenRequiresRefresh(token Token) bool {
-	return time.Now().Add(t.AccessTokenExpiryMargin).Unix() > token.AccessExpiry
+	return time.Now().Add(
+		time.Duration(t.AccessTokenExpiryMargin)*time.Second).
+		Unix() > token.AccessExpiry
 }

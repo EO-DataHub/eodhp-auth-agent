@@ -161,7 +161,7 @@ func TestAccessTokenRequiresRefresh_Valid(t *testing.T) {
 	// Setup fixture
 	c := setup()
 	defer teardown(c)
-	c.AccessTokenExpiryMargin = time.Duration(5) * time.Second
+	c.AccessTokenExpiryMargin = 5
 
 	// Initialise a token
 	token := Token{
@@ -180,7 +180,7 @@ func TestAccessTokenRequiresRefresh_Expired(t *testing.T) {
 	// Setup fixture
 	c := setup()
 	defer teardown(c)
-	c.AccessTokenExpiryMargin = time.Duration(5) * time.Second
+	c.AccessTokenExpiryMargin = 5
 
 	// Initialise a token
 	token := Token{
@@ -199,7 +199,7 @@ func TestAccessTokenRequiresRefresh_WithinMargin(t *testing.T) {
 	// Setup fixture
 	c := setup()
 	defer teardown(c)
-	c.AccessTokenExpiryMargin = time.Duration(10) * time.Second
+	c.AccessTokenExpiryMargin = 10
 
 	// Initialise a token
 	token := Token{

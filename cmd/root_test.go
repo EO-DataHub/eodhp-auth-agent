@@ -35,6 +35,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "./db.sqlite3", c.Database.Source)
 	assert.Equal(t, "ABCD", c.APIToken.Prefix)
 	assert.Equal(t, "secret", c.APIToken.Secret)
+	assert.Equal(t, 5, c.APIToken.AccessTokenExpiryMargin)
 }
 
 func TestLoadEnvVars(t *testing.T) {

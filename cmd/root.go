@@ -118,7 +118,11 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	// Load the config
-	c := &Config{}
+	c := &Config{
+		APIToken: db.TokenDBInputs{
+			AccessTokenExpiryMargin: 5,
+		},
+	} // initialise default values
 	if err := c.loadConfig(buf.Bytes()); err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 		return nil, err
