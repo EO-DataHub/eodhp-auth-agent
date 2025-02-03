@@ -59,7 +59,7 @@ func setUp() *db.TokenDB {
 
 	fmt.Println("config loaded")
 	fmt.Println("\nauth flows:")
-	for _, flow := range config.AuthFlows {
+	for _, flow := range config.AuthStrategies {
 		fmt.Printf("- name: %s\n", flow.Name)
 		fmt.Printf("  domains: %s\n", flow.Domains)
 		fmt.Printf("  authentication url: %s\n", flow.AuthenticationURL)
@@ -69,7 +69,9 @@ func setUp() *db.TokenDB {
 	fmt.Printf("realm: %s\n", config.Keycloak.Realm)
 	fmt.Printf("client id: %s\n", config.Keycloak.ClientID)
 	fmt.Printf("database driver: %s\n", config.Database.Driver)
-	fmt.Printf("api prefix: %s\n\n", config.APIToken.Prefix)
+	fmt.Printf("api prefix: %s\n", config.APIToken.Prefix)
+	fmt.Printf("access token expiry margin: %d\n\n",
+		config.APIToken.AccessTokenExpiryMargin)
 
 	// Create the database client
 	tokenDB := db.NewTokenDB(config.APIToken)
@@ -82,10 +84,10 @@ func setUp() *db.TokenDB {
 }
 
 type Config struct {
-	AuthFlows []auth.AuthFlowInputs         `yaml:"flows"`
-	Keycloak  keycloak.KeycloakClientInputs `yaml:"keycloak"`
-	Database  databaseConfig                `yaml:"database"`
-	APIToken  db.TokenDBInputs              `yaml:"api_token"`
+	AuthStrategies []auth.AuthStrategyInputs     `yaml:"flows"`
+	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
+	Database       databaseConfig                `yaml:"database"`
+	APIToken       db.TokenDBInputs              `yaml:"api_token"`
 }
 
 type databaseConfig struct {
@@ -118,7 +120,11 @@ func loadConfig(path string) (*Config, error) {
 	}
 
 	// Load the config
-	c := &Config{}
+	c := &Config{
+		APIToken: db.TokenDBInputs{
+			AccessTokenExpiryMargin: 5,
+		},
+	} // initialise default values
 	if err := c.loadConfig(buf.Bytes()); err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 		return nil, err

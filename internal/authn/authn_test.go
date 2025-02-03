@@ -21,6 +21,7 @@ type mockTokens struct {
 	getCalled    bool
 	updateErr    error
 	updateCalled bool
+	timeNow      time.Time
 }
 
 func (m *mockTokens) GetTokenByAPIToken(apiToken string) (*db.Token, error) {
@@ -42,6 +43,10 @@ func (m *mockTokens) UpdateToken(token db.Token) error {
 
 func (m *mockTokens) IsAPIToken(token string) bool {
 	return strings.HasPrefix(token, "api")
+}
+
+func (m *mockTokens) AccessTokenRequiresRefresh(token db.Token) bool {
+	return m.timeNow.Unix() > token.AccessExpiry
 }
 
 type mockAuth struct {
@@ -144,6 +149,7 @@ func TestIsAuthenticated_ValidAPIToken_Authenticated(t *testing.T) {
 			Refresh:      "refresh-token",
 			Expires:      time.Now().Add(time.Hour).Unix(),
 		},
+		timeNow: time.Now(),
 	}, &mockAuth{})
 	if err != nil {
 		t.Fatalf("Error creating authenticator: %v", err)
@@ -207,6 +213,7 @@ func TestIsAuthenticated_AccessTokenRequiresRefresh_Authenticated(t *testing.T) 
 			Refresh:      "refresh-token",
 			Expires:      time.Now().Add(time.Hour).Unix(),
 		},
+		timeNow: time.Now(),
 	}, &mockAuth{
 		refreshToken: &keycloak.TokenResponse{
 			Access:    "new-access",
@@ -311,6 +318,7 @@ func TestIsAuthenticated_ExpiredAPIToken_Unauthenticated(t *testing.T) {
 			Refresh:      "refresh-token",
 			Expires:      time.Now().Add(-time.Hour).Unix(), // Expired
 		},
+		timeNow: time.Now(),
 	}, &mockAuth{})
 	if err != nil {
 		t.Fatalf("Error creating authenticator: %v", err)

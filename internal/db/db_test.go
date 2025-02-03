@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -154,4 +155,61 @@ func TestIsAPIToken_Invalid_No(t *testing.T) {
 	// Check if token is an API token
 	result := c.IsAPIToken(token)
 	assert.False(t, result)
+}
+
+func TestAccessTokenRequiresRefresh_Valid(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+	c.AccessTokenExpiryMargin = 5
+
+	// Initialise a token
+	token := Token{
+		ID:           uuid.New().String(),
+		Token:        "testtoken",
+		UserID:       uuid.New().String(),
+		Access:       "testaccess",
+		AccessExpiry: time.Now().Add(time.Duration(10) * time.Second).Unix(),
+		Refresh:      "testrefresh",
+	}
+	result := c.AccessTokenRequiresRefresh(token)
+	assert.False(t, result)
+}
+
+func TestAccessTokenRequiresRefresh_Expired(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+	c.AccessTokenExpiryMargin = 5
+
+	// Initialise a token
+	token := Token{
+		ID:           uuid.New().String(),
+		Token:        "testtoken",
+		UserID:       uuid.New().String(),
+		Access:       "testaccess",
+		AccessExpiry: time.Now().Add(-time.Duration(10) * time.Second).Unix(),
+		Refresh:      "testrefresh",
+	}
+	result := c.AccessTokenRequiresRefresh(token)
+	assert.True(t, result)
+}
+
+func TestAccessTokenRequiresRefresh_WithinMargin(t *testing.T) {
+	// Setup fixture
+	c := setup()
+	defer teardown(c)
+	c.AccessTokenExpiryMargin = 10
+
+	// Initialise a token
+	token := Token{
+		ID:           uuid.New().String(),
+		Token:        "testtoken",
+		UserID:       uuid.New().String(),
+		Access:       "testaccess",
+		AccessExpiry: time.Now().Add(time.Duration(5) * time.Second).Unix(),
+		Refresh:      "testrefresh",
+	}
+	result := c.AccessTokenRequiresRefresh(token)
+	assert.True(t, result)
 }

@@ -25,10 +25,10 @@ var runServerCmd = &cobra.Command{
 		kcClient := keycloak.NewKeycloakClient(config.Keycloak)
 
 		// Create the auth flows
-		flows := make([]auth.AuthProcessor, len(config.AuthFlows))
+		flows := make([]auth.AuthProcessor, len(config.AuthStrategies))
 		var err error
-		for i, flowInputs := range config.AuthFlows {
-			flows[i], err = auth.NewAuthFlow(flowInputs, tokenDB, kcClient)
+		for i, flowInputs := range config.AuthStrategies {
+			flows[i], err = auth.NewAuthStrategy(flowInputs, tokenDB, kcClient)
 			if err != nil {
 				log.Fatal().Str("auth flow", flowInputs.Name).Err(err).
 					Msg("failed to create auth flow")

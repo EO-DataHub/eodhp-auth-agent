@@ -20,6 +20,7 @@ type TokenDB interface {
 	GetTokenByAPIToken(apiToken string) (*db.Token, error)
 	IsAPIToken(token string) bool
 	UpdateToken(token db.Token) error
+	AccessTokenRequiresRefresh(token db.Token) bool
 }
 
 type AuthClient interface {
@@ -152,8 +153,8 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	}
 
 	// Check token access expiry
-	if token.RequiresRefresh() {
-		// Access token has expired, refresh it
+	if a.tokenDB.AccessTokenRequiresRefresh(*token) {
+		// Access token has, or will soon, expire. Refresh it.
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)

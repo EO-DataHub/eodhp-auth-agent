@@ -8,15 +8,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 )
 
 type KeycloakClientInputs struct {
-	KeycloakURL  string `yaml:"keycloak_url"`
-	Realm        string `yaml:"realm"`
-	ClientID     string `yaml:"client_id"`
-	ClientSecret string `yaml:"client_secret"`
+	KeycloakURL             string        `yaml:"keycloak_url"`
+	Realm                   string        `yaml:"realm"`
+	ClientID                string        `yaml:"client_id"`
+	ClientSecret            string        `yaml:"client_secret"`
+	AccessTokenExpiryMargin time.Duration `yaml:"access_token_expiry_margin"`
 }
 
 type KeycloakClient struct {
