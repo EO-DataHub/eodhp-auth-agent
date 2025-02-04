@@ -80,6 +80,13 @@ func setUp() *db.TokenDB {
 		log.Fatal().Err(err).Msg("failed to open database")
 	}
 
+	// Check the database connection
+	err = tokenDB.Ping()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to the database")
+	}
+	log.Info().Msg("connected to database")
+
 	return tokenDB
 }
 

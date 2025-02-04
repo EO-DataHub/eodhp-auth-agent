@@ -89,6 +89,11 @@ func (t *TokenDB) CloseDB() error {
 	return nil
 }
 
+func (t TokenDB) Ping() error {
+	t.log.Info().Msg("pinging database")
+	return t.db.Ping()
+}
+
 func (t TokenDB) InitDB() error {
 	t.log.Info().Msg("initialising database")
 	var err error

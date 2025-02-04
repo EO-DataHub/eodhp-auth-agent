@@ -1,8 +1,8 @@
 # Default input parameters
 go ?= go
 docker ?= docker
-image ?= public.ecr.aws/n1b3o1k2/eodhp-auth-agent
-version ?= 0.4.1
+image ?= public.ecr.aws/eodh/eodhp-auth-agent
+version ?= 0.4.2
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
