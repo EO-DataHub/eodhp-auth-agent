@@ -24,8 +24,8 @@ jobs:
             echo "Github vars.IMAGE_NAME required for publish"
             RETURN_CODE=1
           fi
-          if [ -z "${{ vars.AWS_ACCOUNT_ID }}" ]; then
-            echo "Github vars.AWS_ACCOUNT_ID required for publish"
+          if [ -z "${{ vars.AWS_ROLE_ARN }}" ]; then
+            echo "Github vars.AWS_ROLE_ARN required for publish"
             RETURN_CODE=1
           fi
           if [ -z "${{ vars.AWS_ECR }}" ]; then
