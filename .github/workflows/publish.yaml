@@ -41,7 +41,7 @@ jobs:
       image_name: ${{ vars.IMAGE_NAME }}
       image_tag: ${{ needs.tag.outputs.image-tag }}
       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
-      ecr_alias: ${{ vars.AWS_ECR_ALIAS }}
+      aws_ecr_alias: ${{ vars.AWS_ECR_ALIAS }}
     permissions:
       id-token: write
       contents: read
