@@ -28,6 +28,10 @@ jobs:
             echo "Github vars.AWS_ROLE_ARN required for publish"
             RETURN_CODE=1
           fi
+          if [ -z "${{ vars.AWS_ECR_ALIAS }}" ]; then
+            echo "Github vars.AWS_ECR_ALIAS required for publish"
+            RETURN_CODE=1
+          fi
           exit $RETURN_CODE
   publish:
     name: Build and push Docker image
@@ -37,6 +41,7 @@ jobs:
       image_name: ${{ vars.IMAGE_NAME }}
       image_tag: ${{ needs.tag.outputs.image-tag }}
       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
+      ecr_alias: ${{ vars.AWS_ECR_ALIAS }}
     permissions:
       id-token: write
       contents: read
