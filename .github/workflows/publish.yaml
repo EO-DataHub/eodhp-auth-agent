@@ -28,10 +28,6 @@ jobs:
             echo "Github vars.AWS_ROLE_ARN required for publish"
             RETURN_CODE=1
           fi
-          if [ -z "${{ vars.AWS_ECR }}" ]; then
-            echo "Github vars.AWS_ECR required for publish"
-            RETURN_CODE=1
-          fi
           if [ -z "${{ vars.AWS_REGION }}" ]; then
             echo "Github vars.AWS_REGION required for publish"
             RETURN_CODE=1
@@ -46,7 +42,6 @@ jobs:
       image_tag: ${{ needs.tag.outputs.image-tag }}
       aws_region: ${{ vars.AWS_REGION }}
       aws_role_arn: ${{ vars.AWS_ROLE_ARN }}
-      aws_ecr: ${{ vars.AWS_ECR }}
     permissions:
       id-token: write
       contents: read
