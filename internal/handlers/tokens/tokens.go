@@ -175,7 +175,7 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		}
 
 		// Write the response
-		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(v1.CreateTokenResponse{
 			GetTokenResponse: v1.GetTokenResponse{
 				ID:        token.ID,

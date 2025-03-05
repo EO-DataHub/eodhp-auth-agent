@@ -142,7 +142,7 @@ func WorkspaceAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Check if the workspace is in the user's workspaces
-		if !contains(claims.Workspaces, workspace) {
+		if claims.Workspaces == nil || !contains(claims.Workspaces, workspace) {
 			logger.Error().Msg("user not authorized for workspace")
 			http.Error(w, "user not authorized for workspace",
 				http.StatusForbidden)

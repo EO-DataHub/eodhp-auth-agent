@@ -161,7 +161,7 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 
 	// Test the handler
 	handler.ServeHTTP(w, r.WithContext(ctx))
-	assert.Equal(t, http.StatusAccepted, w.Code)
+	assert.Equal(t, http.StatusCreated, w.Code)
 
 	// Parse the response body
 	var response v1.CreateTokenResponse
@@ -231,7 +231,7 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 
 	// Test the handler
 	handler.ServeHTTP(w, r.WithContext(ctx))
-	assert.Equal(t, http.StatusAccepted, w.Code)
+	assert.Equal(t, http.StatusCreated, w.Code)
 
 	// Parse the response body
 	var response v1.CreateTokenResponse
