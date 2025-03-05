@@ -8,6 +8,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/golang-jwt/jwt"
+	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -73,5 +74,48 @@ func WithLogger(next http.HandlerFunc) http.HandlerFunc {
 			Logger()
 		ctx := logger.WithContext(r.Context())
 		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+// For `user` path parameter, `user` may be set to "me". Detect when this is the
+// case and replace with the user ID from the JWT claims.
+//
+// Must be after JWTMiddleware in the middleware chain.
+func ConvertMeToUser(next http.HandlerFunc, param string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger := zerolog.Ctx(r.Context()).With().
+			Str("handler", "convert me to user").Logger()
+
+		vars := mux.Vars(r)
+		user := vars[param]
+
+		// Pass through if user is not "me"
+		if user != "me" {
+			logger.Debug().Str("user", user).Msg("user not me")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Get the user ID from the claims
+		claims, ok := r.Context().Value(ClaimsKey).(Claims)
+		if !ok {
+			logger.Error().Msg("no claims found in context. This middleware " +
+				"must be called after JWTMiddleware")
+			http.Error(w, "no claims found in context", http.StatusUnauthorized)
+			return
+		}
+		userID := claims.Subject
+		if userID == "" {
+			logger.Error().Msg("no user ID in claims")
+			http.Error(w, "no user ID in claims", http.StatusUnauthorized)
+			return
+		}
+
+		// Replace "me" with the user ID
+		vars[param] = userID
+		logger.Debug().Str("user", userID).Msg("replaced me with user")
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
 	}
 }

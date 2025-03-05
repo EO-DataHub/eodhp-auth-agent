@@ -43,22 +43,25 @@ var runServerCmd = &cobra.Command{
 		api := r.PathPrefix(config.BasePath).Subrouter()
 
 		// The auth routes do not use the JWT middleware
-		api.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(flows))).
+		authApi := api.PathPrefix("/auth").Subrouter()
+		authApi.HandleFunc("/", middleware.WithLogger(auth.AuthHandler(flows))).
 			Methods(http.MethodGet)
-		api.HandleFunc("/auth/introspect", middleware.WithLogger(
+		authApi.HandleFunc("/introspect", middleware.WithLogger(
 			auth.IntrospectAuthHandler(kcClient))).Methods(http.MethodPost)
 
 		// The CRUD routes all use the same middleware
-		var middleware = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.WithLogger(middleware.JWTMiddleware(next))
+		var mw = func(next http.HandlerFunc) http.HandlerFunc {
+			return middleware.WithLogger(middleware.ConvertMeToUser(
+				middleware.JWTMiddleware(next), "user-id"))
 		}
-		api.HandleFunc("/tokens", middleware(tokens.ListTokensHandler(tokenDB))).
+		workspacesAPI := api.PathPrefix("/workspaces/{workspace}/{user-id}").Subrouter()
+		workspacesAPI.HandleFunc("/tokens", mw(tokens.ListTokensHandler(tokenDB))).
 			Methods(http.MethodGet)
-		api.HandleFunc("/tokens", middleware(tokens.CreateTokenHandler(tokenDB,
+		workspacesAPI.HandleFunc("/tokens", mw(tokens.CreateTokenHandler(tokenDB,
 			kcClient))).Methods(http.MethodPost)
-		api.HandleFunc("/tokens/{token_id}", middleware(tokens.GetTokenHandler(
+		workspacesAPI.HandleFunc("/tokens/{token-id}", mw(tokens.GetTokenHandler(
 			tokenDB))).Methods(http.MethodGet)
-		api.HandleFunc("/tokens/{token_id}", middleware(tokens.DeleteTokenHandler(
+		workspacesAPI.HandleFunc("/tokens/{token-id}", mw(tokens.DeleteTokenHandler(
 			tokenDB, kcClient))).Methods(http.MethodDelete)
 
 		// Docs

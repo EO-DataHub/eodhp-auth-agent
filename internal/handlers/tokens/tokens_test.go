@@ -59,10 +59,12 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	// Populate the DB with some tokens
 	tokens := make([]db.Token, 3)
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 	for i := range tokens {
 		tokens[i] = db.Token{
 			ID:           uuid.New().String(),
 			Token:        fmt.Sprintf("test-token-%d", i),
+			Workspace:    workspace,
 			UserID:       userID,
 			Access:       fmt.Sprintf("test-access-%d", i),
 			AccessExpiry: time.Now().Add(time.Hour).Unix(),
@@ -76,6 +78,7 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	err := d.CreateToken(db.Token{
 		ID:           uuid.New().String(),
 		Token:        "test-token-4",
+		Workspace:    "another-workspace",
 		UserID:       "TUVWXYZ-87654321",
 		Access:       "test-access-4",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
@@ -87,17 +90,16 @@ func TestListTokensHandler_Authenticated_Success(t *testing.T) {
 	handler := ListTokensHandler(d)
 
 	// Setup request and response
-	r := httptest.NewRequest("GET", "/tokens", nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
+	r := httptest.NewRequest("GET", fmt.Sprintf("/%s/%s/tokens", workspace,
+		userID), nil)
 	w := httptest.NewRecorder()
 
+	// Setup path parameters
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID})
+
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
@@ -139,13 +141,14 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 
 	// Setup request and response
 	userID := "ABCDEFG-12345678"
-	payload := map[string]any{
-		"name": "test-token",
-	}
+	workspace := "my-workspace"
+	payload := map[string]any{"name": "test-token"}
 	body, err := json.Marshal(payload)
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", "application/json")
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID})
 	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -154,7 +157,6 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	token, err := authn.CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
 	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
-	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 	w := httptest.NewRecorder()
 
 	// Test the handler
@@ -171,9 +173,10 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	assert.NotEqual(t, "", response.Token)
 	assert.Equal(t, userID, response.UserID)
 	assert.Equal(t, payload["name"], response.Name)
+	assert.Equal(t, "offline_access workspace:my-workspace", response.Scope)
 
 	// Check object was created in DB
-	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
+	dbToken, err := tokenDB.GetTokenByID(response.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, response.ID, dbToken.ID)
 }
@@ -208,14 +211,14 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 
 	// Setup request and response
 	userID := "ABCDEFG-12345678"
-	payload := map[string]any{
-		"name":  "test-token",
-		"scope": "test-scope",
-	}
+	workspace := "my-workspace"
+	payload := map[string]any{"name": "test-token"}
 	body, err := json.Marshal(payload)
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	r.Header.Set("Content-Type", "application/json")
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID})
 	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -224,7 +227,6 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 	token, err := authn.CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
 	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
-	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 	w := httptest.NewRecorder()
 
 	// Test the handler
@@ -241,10 +243,10 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 	assert.NotEqual(t, "", response.Token)
 	assert.Equal(t, userID, response.UserID)
 	assert.Equal(t, payload["name"], response.Name)
-	assert.Equal(t, payload["scope"], response.Scope)
+	assert.Equal(t, "offline_access workspace:my-workspace", response.Scope)
 
 	// Check object was created in DB
-	dbToken, err := tokenDB.GetTokenByID(response.ID, userID)
+	dbToken, err := tokenDB.GetTokenByID(response.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, response.ID, dbToken.ID)
 }
@@ -316,12 +318,13 @@ func TestCreateTokenHandler_InvalidRequest_BadRequest(t *testing.T) {
 
 	// Setup request and response
 	userID := "ABCDEFG-12345678"
-	payload := map[string]any{
-		// missing "name" field
-	}
+	workspace := "my-workspace"
+	payload := map[string]any{} // missing "name" field
 	body, err := json.Marshal(payload)
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID})
 	claims := middleware.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: userID,
@@ -330,7 +333,6 @@ func TestCreateTokenHandler_InvalidRequest_BadRequest(t *testing.T) {
 	token, err := authn.CreateJWTToken(claims, "secret-key")
 	assert.NoError(t, err)
 	ctx := context.WithValue(r.Context(), middleware.TokenKey, token)
-	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 	w := httptest.NewRecorder()
 
 	// Test the handler
@@ -346,15 +348,17 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	// Populate the DB with a token
 	tokenID := uuid.New().String()
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 	err := d.CreateToken(db.Token{
 		ID:           tokenID,
 		Token:        "test-token-1",
+		Name:         "test-1",
+		Workspace:    workspace,
 		UserID:       userID,
+		Scope:        "offline_access workspace:my-workspace",
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
-		Name:         "test-1",
-		Scope:        "scope-1",
 		Expires:      time.Now().Add(time.Hour * 24).Unix(),
 		Created:      time.Now().Unix(),
 	})
@@ -365,17 +369,12 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	r = mux.SetURLVars(r, map[string]string{"token_id": tokenID})
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID, "token-id": tokenID})
 	w := httptest.NewRecorder()
 
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
@@ -387,7 +386,7 @@ func TestGetTokenHandler_Authenticated_Success(t *testing.T) {
 	assert.Equal(t, tokenID, response.ID)
 	assert.Equal(t, userID, response.UserID)
 	assert.Equal(t, "test-1", response.Name)
-	assert.Equal(t, "scope-1", response.Scope)
+	assert.Equal(t, "offline_access workspace:my-workspace", response.Scope)
 }
 
 func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
@@ -398,15 +397,17 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 	// Populate the DB with a token
 	tokenID := uuid.New().String()
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 	err := d.CreateToken(db.Token{
 		ID:           tokenID,
 		Token:        "test-token-1",
+		Name:         "test-1",
 		UserID:       userID,
+		Workspace:    workspace,
+		Scope:        "offline_access workspace:my-workspace",
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
-		Name:         "test-1",
-		Scope:        "scope-1",
 		Expires:      time.Now().Add(time.Hour * 24).Unix(),
 		Created:      time.Now().Unix(),
 	})
@@ -423,22 +424,18 @@ func TestDeleteTokenHandler_Authenticated_Success(t *testing.T) {
 	handler := DeleteTokenHandler(d, k)
 
 	// Setup request and response
-	r := httptest.NewRequest("DELETE", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	r = mux.SetURLVars(r, map[string]string{"token_id": tokenID})
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
+	r := httptest.NewRequest("DELETE", fmt.Sprintf("/%s/%s/tokens/%s",
+		workspace, userID, tokenID), nil)
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID, "token-id": tokenID})
 	w := httptest.NewRecorder()
 
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusNoContent, w.Code)
 
 	// Check object was deleted from DB
-	_, err = d.GetTokenByID(tokenID, userID)
+	_, err = d.GetTokenByID(tokenID)
 	assert.ErrorIs(t, err, db.ErrNotFound)
 }
 
@@ -448,17 +445,19 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 	defer d.CloseDB()
 
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 
 	// Populate the DB with a token for a different user
 	err := d.CreateToken(db.Token{
 		ID:           uuid.New().String(),
 		Token:        "test-token-4",
+		Name:         "test-4",
 		UserID:       "TUVWXYZ-87654321",
+		Workspace:    "another-workspace",
+		Scope:        "offline_access workspace:another-workspace",
 		Access:       "test-access-4",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-4",
-		Name:         "test-4",
-		Scope:        "scope-4",
 		Expires:      time.Now().Add(time.Hour * 24).Unix(),
 		Created:      time.Now().Unix(),
 	})
@@ -469,16 +468,12 @@ func TestListTokensHandler_NoTokens_SuccessEmptyList(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", "/tokens", nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID})
 	w := httptest.NewRecorder()
 
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Parse the response body
@@ -498,15 +493,16 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 	// Populate the DB with a token
 	tokenID := uuid.New().String()
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 	err := d.CreateToken(db.Token{
 		ID:           tokenID,
 		Token:        "test-token-1",
+		Name:         "test-1",
 		UserID:       "TUVWXYZ-87654321", // another user
+		Scope:        "offline_access workspace:my-workspace",
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
-		Name:         "test-1",
-		Scope:        "scope-1",
 		Expires:      time.Now().Add(time.Hour * 24).Unix(),
 		Created:      time.Now().Unix(),
 	})
@@ -517,17 +513,12 @@ func TestGetTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	r = mux.SetURLVars(r, map[string]string{"token_id": tokenID})
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID, "token-id": tokenID})
 	w := httptest.NewRecorder()
 
 	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
+	handler.ServeHTTP(w, r)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
@@ -539,15 +530,16 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 	// Populate the DB with a token
 	tokenID := uuid.New().String()
 	userID := "ABCDEFG-12345678"
+	workspace := "my-workspace"
 	err := d.CreateToken(db.Token{
 		ID:           tokenID,
 		Token:        "test-token-1",
+		Name:         "test-1",
 		UserID:       "TUVWXYZ-87654321", // another user
+		Scope:        "offline_access workspace:my-workspace",
 		Access:       "test-access-1",
 		AccessExpiry: time.Now().Add(time.Hour).Unix(),
 		Refresh:      "test-refresh-1",
-		Name:         "test-1",
-		Scope:        "scope-1",
 		Expires:      time.Now().Add(time.Hour * 24).Unix(),
 		Created:      time.Now().Unix(),
 	})
@@ -565,51 +557,11 @@ func TestDeleteTokenHandler_RequestTokenForAnotherUser_NotFound(t *testing.T) {
 
 	// Setup request and response
 	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	claims := &middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
-			Subject: userID,
-		},
-	}
-	r = mux.SetURLVars(r, map[string]string{"token_id": tokenID})
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, *claims)
-	w := httptest.NewRecorder()
-
-	// Test the handler
-	handler.ServeHTTP(w, r.WithContext(ctx))
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestGetTokenHandler_NotAuthenticated_Unauthorized(t *testing.T) {
-	// Setup the token DB
-	d := setupTokenDB()
-	defer d.CloseDB()
-
-	// Populate the DB with a token
-	tokenID := uuid.New().String()
-	userID := "ABCDEFG-12345678"
-	err := d.CreateToken(db.Token{
-		ID:           tokenID,
-		Token:        "test-token-1",
-		UserID:       userID,
-		Access:       "test-access-1",
-		AccessExpiry: time.Now().Add(time.Hour).Unix(),
-		Refresh:      "test-refresh-1",
-		Name:         "test-1",
-		Scope:        "scope-1",
-		Expires:      time.Now().Add(time.Hour * 24).Unix(),
-		Created:      time.Now().Unix(),
-	})
-	assert.NoError(t, err)
-
-	// Create handler
-	handler := GetTokenHandler(d)
-
-	// Setup request and response with no authentication
-	r := httptest.NewRequest("GET", fmt.Sprintf("/tokens/%s", tokenID), nil)
-	r = mux.SetURLVars(r, map[string]string{"token_id": tokenID})
+	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
+		"user-id": userID, "token-id": tokenID})
 	w := httptest.NewRecorder()
 
 	// Test the handler
 	handler.ServeHTTP(w, r)
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }

@@ -2,6 +2,7 @@ package tokens
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,27 +15,56 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger := zerolog.Ctx(r.Context()).With().
+			Str("handler", "get token").Logger()
+
+		// Read path params
+		vars := mux.Vars(r)
+		workspace := vars["workspace"]
+		userID := vars["user-id"]
+		tokenID := vars["token-id"]
+
+		// Get the token from the database
+		token, err := tokenDB.GetUserToken(tokenID, workspace, userID)
+		if err != nil {
+			if err == db.ErrNotFound {
+				logger.Error().Err(err).Msg("Token not found")
+				http.Error(w, "Token not found", http.StatusNotFound)
+				return
+			}
+			logger.Error().Err(err).Msg("Failed to get token")
+			http.Error(w, "Failed to get token", http.StatusInternalServerError)
+			return
+		}
+
+		// Write the response
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(v1.GetTokenResponse{
+			ID:        token.ID,
+			UserID:    token.UserID,
+			Name:      token.Name,
+			Workspace: token.Workspace,
+			Scope:     token.Scope,
+			Expiry:    time.Unix(token.Expires, 0).Format(time.RFC3339),
+			Created:   time.Unix(token.Created, 0).Format(time.RFC3339),
+		})
+	}
+}
+
 func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
 			Str("handler", "list tokens").Logger()
 
-		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
-		if !ok {
-			logger.Error().Msg("No claims found in context")
-			http.Error(w, "No claims found in context", http.StatusUnauthorized)
-			return
-		}
-		userID := claims.Subject
-		if userID == "" {
-			logger.Error().Msg("No user ID in claims")
-			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
-			return
-		}
+		// Read path params
+		vars := mux.Vars(r)
+		workspace := vars["workspace"]
+		userID := vars["user-id"]
 
 		// List the tokens for the user
-		tokens, err := tokenDB.ListUserTokens(userID)
+		tokens, err := tokenDB.ListUserTokens(workspace, userID)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to list tokens")
 			http.Error(w, "Failed to list tokens",
@@ -44,16 +74,17 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 
 		// Write the response
 		w.WriteHeader(http.StatusOK)
-		response := make([]v1.GetTokenResponse, len(tokens))
-		for i, token := range tokens {
-			response[i] = v1.GetTokenResponse{
-				ID:      token.ID,
-				UserID:  token.UserID,
-				Name:    token.Name,
-				Scope:   token.Scope,
-				Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
-				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
-			}
+		response := make([]v1.GetTokenResponse, 0, len(tokens))
+		for _, token := range tokens {
+			response = append(response, v1.GetTokenResponse{
+				ID:        token.ID,
+				UserID:    token.UserID,
+				Name:      token.Name,
+				Workspace: token.Workspace,
+				Scope:     token.Scope,
+				Expiry:    time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Created:   time.Unix(token.Created, 0).Format(time.RFC3339),
+			})
 		}
 		json.NewEncoder(w).Encode(response)
 	}
@@ -66,13 +97,10 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		logger := zerolog.Ctx(r.Context()).With().
 			Str("handler", "create token").Logger()
 
-		// Get the user ID from the claims
-		claims := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
-		if claims.Subject == "" {
-			logger.Error().Msg("No user ID in claims")
-			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
-			return
-		}
+		// Read path params
+		vars := mux.Vars(r)
+		workspace := vars["workspace"]
+		userID := vars["user-id"]
 
 		// Get the token from the context
 		authToken := r.Context().Value(middleware.TokenKey).(string)
@@ -100,7 +128,8 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		}
 
 		// Get the offline token from the Keycloak client
-		resp, err := auth.ExchangeToken(authToken, req.Scope)
+		scope := fmt.Sprintf("offline_access workspace:%s", workspace)
+		resp, err := auth.ExchangeToken(authToken, scope)
 		if err != nil {
 			var errStatus int
 			if err, ok := err.(*keycloak.HTTPError); ok {
@@ -124,15 +153,16 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 
 		// Create the token and save to the database
 		token := db.Token{
-			ID:     uuid.New().String(),
-			Token:  apiToken,
-			UserID: claims.Subject,
-			Access: resp.Access,
+			ID:        uuid.New().String(),
+			Token:     apiToken,
+			Name:      req.Name,
+			Workspace: workspace,
+			UserID:    userID,
+			Scope:     scope,
+			Access:    resp.Access,
 			AccessExpiry: time.Now().Add(time.Duration(resp.ExpiresIn) *
 				time.Second).Unix(),
 			Refresh: resp.Refresh,
-			Name:    req.Name,
-			Scope:   req.Scope,
 			Expires: time.Now().Add(time.Duration(req.Expires) *
 				time.Hour * 24).Unix(), // Now + d days
 			Created: time.Now().Unix(),
@@ -148,62 +178,15 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(v1.CreateTokenResponse{
 			GetTokenResponse: v1.GetTokenResponse{
-				ID:      token.ID,
-				UserID:  token.UserID,
-				Name:    token.Name,
-				Scope:   token.Scope,
-				Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
-				Created: time.Unix(token.Created, 0).Format(time.RFC3339),
+				ID:        token.ID,
+				UserID:    token.UserID,
+				Name:      token.Name,
+				Workspace: token.Workspace,
+				Scope:     token.Scope,
+				Expiry:    time.Unix(token.Expires, 0).Format(time.RFC3339),
+				Created:   time.Unix(token.Created, 0).Format(time.RFC3339),
 			},
 			Token: token.Token,
-		})
-	}
-}
-
-func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		logger := zerolog.Ctx(r.Context()).With().
-			Str("handler", "get token").Logger()
-
-		// Get the token ID from the request URL
-		tokenID := mux.Vars(r)["token_id"]
-
-		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
-		if !ok {
-			logger.Error().Msg("No claims found in context")
-			http.Error(w, "No claims found in context", http.StatusUnauthorized)
-			return
-		}
-		userID := claims.Subject
-		if userID == "" {
-			logger.Error().Msg("No user ID in claims")
-			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
-			return
-		}
-
-		// Get the token from the database
-		token, err := tokenDB.GetTokenByID(tokenID, userID)
-		if err != nil {
-			if err == db.ErrNotFound {
-				logger.Error().Err(err).Msg("Token not found")
-				http.Error(w, "Token not found", http.StatusNotFound)
-				return
-			}
-			logger.Error().Err(err).Msg("Failed to get token")
-			http.Error(w, "Failed to get token", http.StatusInternalServerError)
-			return
-		}
-
-		// Write the response
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(v1.GetTokenResponse{
-			ID:      token.ID,
-			UserID:  token.UserID,
-			Name:    token.Name,
-			Scope:   token.Scope,
-			Expiry:  time.Unix(token.Expires, 0).Format(time.RFC3339),
-			Created: time.Unix(token.Created, 0).Format(time.RFC3339),
 		})
 	}
 }
@@ -215,25 +198,14 @@ func DeleteTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		logger := zerolog.Ctx(r.Context()).With().
 			Str("handler", "delete token").Logger()
 
-		// Get the token ID from the request URL
-		tokenID := mux.Vars(r)["token_id"]
-
-		// Get the user ID from the claims
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(middleware.Claims)
-		if !ok {
-			logger.Error().Msg("No claims found in context")
-			http.Error(w, "No claims found in context", http.StatusUnauthorized)
-			return
-		}
-		userID := claims.Subject
-		if userID == "" {
-			logger.Error().Msg("No user ID in claims")
-			http.Error(w, "No user ID in claims", http.StatusUnauthorized)
-			return
-		}
+		// Read path params
+		vars := mux.Vars(r)
+		workspace := vars["workspace"]
+		userID := vars["user-id"]
+		tokenID := vars["token-id"]
 
 		// Revoke the token in Keycloak
-		token, err := tokenDB.GetTokenByID(tokenID, userID)
+		token, err := tokenDB.GetUserToken(tokenID, workspace, userID)
 		if err != nil {
 			if err == db.ErrNotFound {
 				logger.Error().Err(err).Msg("Token not found")
@@ -251,7 +223,7 @@ func DeleteTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 		}
 
 		// Delete the token from the database
-		if err := tokenDB.DeleteTokenByID(tokenID, userID); err != nil {
+		if err := tokenDB.DeleteTokenByID(tokenID); err != nil {
 			if err == db.ErrNotFound {
 				logger.Error().Err(err).Msg("Token not found")
 				http.Error(w, "Token not found", http.StatusNotFound)

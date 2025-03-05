@@ -17,12 +17,13 @@ import (
 type Token struct {
 	ID           string
 	Token        string
+	Name         string
+	Workspace    string
 	UserID       string
+	Scope        string
 	Access       string
 	AccessExpiry int64
 	Refresh      string
-	Name         string
-	Scope        string
 	Expires      int64
 	Created      int64
 }
@@ -105,6 +106,7 @@ func (t TokenDB) InitDB() error {
 			id UUID PRIMARY KEY,
 			name TEXT NOT NULL,
 			token TEXT NOT NULL UNIQUE,
+			workspace TEXT NOT NULL,
 			user_id UUID NOT NULL,
 			access TEXT NOT NULL,
 			access_expiry INT NOT NULL,
@@ -118,23 +120,15 @@ func (t TokenDB) InitDB() error {
 		return err
 	}
 
-	// Create an index on the tokens(token) column
-	t.log.Trace().Msg("creating tokens(token) index")
+	// Create token database indices
+	t.log.Trace().Msg("creating token database indices")
 	_, err = t.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_token ON tokens(token)
+		CREATE INDEX IF NOT EXISTS idx_token ON tokens(token);
+		CREATE INDEX IF NOT EXISTS idx_user ON tokens(workspace);
+		CREATE INDEX IF NOT EXISTS idx_user ON tokens(user_id);
 	`)
 	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create tokens(token) index")
-		return err
-	}
-
-	// Create an index on the tokens(user_id) column
-	t.log.Trace().Msg("creating tokens(user_id) index")
-	_, err = t.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_user ON tokens(user_id)
-	`)
-	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create tokens(user_id) index")
+		t.log.Error().Err(err).Msg("failed to create token database indices")
 		return err
 	}
 
@@ -142,18 +136,18 @@ func (t TokenDB) InitDB() error {
 	return nil
 }
 
-func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
+func (t TokenDB) GetTokenByID(id string) (*Token, error) {
 	t.log.Trace().Msg("getting token by id")
 
-	token := &Token{
-		ID:     id,
-		UserID: userID,
-	}
+	token := &Token{}
 	err := t.db.QueryRow(
-		`SELECT access, access_expiry, refresh, name, scope, expires, created
-		FROM tokens WHERE id = $1 AND user_id = $2`, id, userID).
-		Scan(&token.Access, &token.AccessExpiry, &token.Refresh, &token.Name,
-			&token.Scope, &token.Expires, &token.Created)
+		`SELECT id, name, workspace, user_id, scope, access, 
+		access_expiry, refresh, expires, created
+		FROM tokens 
+		WHERE id = $1`, id).
+		Scan(&token.ID, &token.Name, &token.Workspace, &token.UserID,
+			&token.Scope, &token.Access, &token.AccessExpiry, &token.Refresh,
+			&token.Expires, &token.Created)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Warn().Err(ErrNotFound).Msg("token not found")
@@ -168,6 +162,27 @@ func (t TokenDB) GetTokenByID(id, userID string) (*Token, error) {
 	return token, nil
 }
 
+func (t TokenDB) DeleteTokenByID(id string) error {
+	t.log.Trace().Msg("deleting token by id")
+
+	result, err := t.db.Exec(
+		`DELETE FROM tokens WHERE id = $1`, id)
+	if err != nil {
+		t.log.Err(err).Msg("failed to delete token by id")
+		return err
+	}
+
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		t.log.Warn().Err(ErrNotFound).Msg("token not found")
+		return ErrNotFound
+	} else if rows > 1 {
+		t.log.Warn().Msg("more than one token deleted")
+	}
+
+	t.log.Debug().Msg("token deleted")
+	return nil
+}
+
 func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	t.log.Trace().Msg("getting token by api token")
 
@@ -180,11 +195,14 @@ func (t TokenDB) GetTokenByAPIToken(apiToken string) (*Token, error) {
 	var cypherAccess *string
 	var cypherRefresh *string
 	err := t.db.QueryRow(
-		`SELECT id, user_id, access, access_expiry, refresh, name, scope, 
-		expires, created FROM tokens WHERE token = $1`, hashToken).
-		Scan(&token.ID, &token.UserID, &cypherAccess, &token.AccessExpiry,
-			&cypherRefresh, &token.Name, &token.Scope, &token.Expires,
-			&token.Created)
+		`SELECT id, name, workspace, user_id, scope, access, access_expiry, 
+		refresh, expires, created 
+		FROM tokens 
+		WHERE token = $1`,
+		hashToken).
+		Scan(&token.ID, &token.Name, &token.Workspace, &token.UserID,
+			&token.Scope, &cypherAccess, &token.AccessExpiry, &cypherRefresh,
+			&token.Expires, &token.Created)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			t.log.Warn().Err(ErrNotFound).Msg("token not found")
@@ -230,11 +248,12 @@ func (t TokenDB) CreateToken(token Token) error {
 	}
 
 	_, err = t.db.Exec(
-		`INSERT INTO tokens (id, token, user_id, access, access_expiry, refresh,
-		name, scope, expires, created) 
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		token.ID, hashToken, token.UserID, cypherAccess, token.AccessExpiry,
-		cypherRefresh, token.Name, token.Scope, token.Expires, token.Created)
+		`INSERT INTO tokens (id, token, name, workspace, user_id, scope, 
+		access, access_expiry, refresh, expires, created) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		token.ID, hashToken, token.Name, token.Workspace, token.UserID,
+		token.Scope, cypherAccess, token.AccessExpiry, cypherRefresh,
+		token.Expires, token.Created)
 	if err != nil {
 		t.log.Err(err).Msg("failed to create token")
 		return err
@@ -279,14 +298,41 @@ func (t TokenDB) UpdateToken(token Token) error {
 	return nil
 }
 
-func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
+func (t TokenDB) GetUserToken(id, workspace, userID string) (*Token, error) {
+	t.log.Trace().Msg("getting user token")
+
+	token := &Token{}
+	err := t.db.QueryRow(
+		`SELECT id, name, workspace, user_id, scope, access, 
+		access_expiry, refresh, expires, created
+		FROM tokens 
+		WHERE id = $1 AND workspace = $2 AND user_id = $3`,
+		id, workspace, userID).
+		Scan(&token.ID, &token.Name, &token.Workspace, &token.UserID,
+			&token.Scope, &token.Access, &token.AccessExpiry, &token.Refresh,
+			&token.Expires, &token.Created)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			t.log.Warn().Err(ErrNotFound).Msg("token not found")
+			return nil, ErrNotFound
+		}
+		t.log.Err(err).Msg("failed to get user token")
+		return nil, err
+	}
+	// token.Token is not returned because it has been hashed
+
+	t.log.Debug().Msg("token found")
+	return token, nil
+}
+
+func (t TokenDB) ListUserTokens(workspace, userID string) ([]*Token, error) {
 	t.log.Trace().Msg("listing user tokens")
 
 	var tokens []*Token
 
 	rows, err := t.db.Query(
-		`SELECT id, access_expiry, name, scope, expires, created
-		FROM tokens WHERE user_id = $1`, userID)
+		`SELECT id, access_expiry, name, workspace, scope, expires, created
+		FROM tokens WHERE workspace = $1 AND user_id = $2`, workspace, userID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return tokens, nil
@@ -301,7 +347,7 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 			UserID: userID,
 		}
 		err := rows.Scan(&token.ID, &token.AccessExpiry, &token.Name,
-			&token.Scope, &token.Expires, &token.Created)
+			&token.Workspace, &token.Scope, &token.Expires, &token.Created)
 		if err != nil {
 			t.log.Err(err).Msg("failed to scan token")
 			return nil, err
@@ -312,27 +358,6 @@ func (t TokenDB) ListUserTokens(userID string) ([]*Token, error) {
 
 	t.log.Debug().Msg("user tokens listed")
 	return tokens, nil
-}
-
-func (t TokenDB) DeleteTokenByID(id, userID string) error {
-	t.log.Trace().Msg("deleting token")
-
-	result, err := t.db.Exec(
-		`DELETE FROM tokens WHERE id = $1 AND user_id = $2`, id, userID)
-	if err != nil {
-		t.log.Err(err).Msg("failed to delete token")
-		return err
-	}
-
-	if rows, _ := result.RowsAffected(); rows == 0 {
-		t.log.Warn().Err(ErrNotFound).Msg("token not found")
-		return ErrNotFound
-	} else if rows > 1 {
-		t.log.Warn().Msg("more than one token deleted")
-	}
-
-	t.log.Debug().Msg("token deleted")
-	return nil
 }
 
 func (t TokenDB) IsAPIToken(token string) bool {
