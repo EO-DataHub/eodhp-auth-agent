@@ -15,6 +15,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// @Summary Get workspace user token
+// @Description Get a workspace user token by ID. {user-id} can be set to "me" to use the token owner's user id.
+// @Tags api-token workspace
+// @Accept json
+// @Produce json
+// @Param workspace path string true "Workspace ID" example(my-workspace)
+// @Param user-id path string true "User ID" example(me)
+// @Param token-id path string true "Token ID" example(454f4448000000000000000000000000)
+// @Success 200 {object} v1.GetTokenResponse
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace}/{user-id}/tokens/{token-id} [get]
 func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
@@ -53,6 +66,18 @@ func GetTokenHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	}
 }
 
+// @Summary Get workspace user tokens
+// @Description Get workspace user tokens. {user-id} can be set to "me" to use the token owner's user id.
+// @Tags api-token workspace
+// @Accept json
+// @Produce json
+// @Param workspace path string true "Workspace ID" example(my-workspace)
+// @Param user-id path string true "User ID" example(me)
+// @Success 200 {array} v1.GetTokenResponse
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace}/{user-id}/tokens [get]
 func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
@@ -90,6 +115,18 @@ func ListTokensHandler(tokenDB *db.TokenDB) http.HandlerFunc {
 	}
 }
 
+// @Summary Create workspace user tokens
+// @Description Create workspace a user token. {user-id} can be set to "me" to use the token owner's user id.
+// @Tags api-token workspace
+// @Accept json
+// @Produce json
+// @Param workspace path string true "Workspace ID" example(my-workspace)
+// @Param user-id path string true "User ID" example(me)
+// @Success 201 {object} v1.CreateTokenResponse
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace}/{user-id}/tokens [post]
 func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 ) http.HandlerFunc {
 
@@ -191,6 +228,19 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 	}
 }
 
+// @Summary Delete workspace user token
+// @Description Delete a workspace user token by ID. {user-id} can be set to "me" to use the token owner's user id.
+// @Tags api-token workspace
+// @Accept json
+// @Produce json
+// @Param workspace path string true "Workspace ID" example(my-workspace)
+// @Param user-id path string true "User ID" example(me)
+// @Param token-id path string true "Token ID" example(454f4448000000000000000000000000)
+// @Success 204 "No Content"
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace}/{user-id}/tokens/{token-id} [delete]
 func DeleteTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 ) http.HandlerFunc {
 

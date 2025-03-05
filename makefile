@@ -19,3 +19,8 @@ container-build:
 .PHONY: container-push
 container-push:
 	$(docker) push $(image):$(version)
+
+# Generate Swagger docs
+.PHONY: docs
+docs:
+	swag init -g cmd/runserver.go

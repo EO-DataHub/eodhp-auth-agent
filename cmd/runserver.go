@@ -17,6 +17,9 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// @title EODHP Auth Agent API
+// @version v1
+// @description This is the API for the UK EO DataHub Auth Agent.
 var runServerCmd = &cobra.Command{
 	Use:   "runserver",
 	Short: "Run the server",
