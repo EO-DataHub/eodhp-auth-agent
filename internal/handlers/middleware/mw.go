@@ -17,6 +17,7 @@ type contextKey string
 type tokenKey string
 type Claims struct {
 	jwt.StandardClaims
+	Workspaces []string `json:"workspaces"`
 }
 
 const ClaimsKey contextKey = "claims"
@@ -118,4 +119,50 @@ func ConvertMeToUser(next http.HandlerFunc, param string) http.HandlerFunc {
 		// Call the next handler
 		next.ServeHTTP(w, r)
 	}
+}
+
+// Middleware to check workspace authorization.
+//
+// Must be after JWTMiddleware in the middleware chain.
+func WorkspaceAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger := zerolog.Ctx(r.Context()).With().
+			Str("handler", "workspace auth middleware").Logger()
+
+		vars := mux.Vars(r)
+		workspace := vars["workspace"]
+
+		// Get the claims from the context
+		claims, ok := r.Context().Value(ClaimsKey).(Claims)
+		if !ok {
+			logger.Error().Msg("no claims found in context. This middleware " +
+				"must be called after JWTMiddleware")
+			http.Error(w, "no claims found in context", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if the workspace is in the user's workspaces
+		if !contains(claims.Workspaces, workspace) {
+			logger.Error().Msg("user not authorized for workspace")
+			http.Error(w, "user not authorized for workspace",
+				http.StatusForbidden)
+			return
+		}
+
+		logger.Debug().Str("user", claims.Subject).Str("workspace", workspace).
+			Msg("user authorized for workspace")
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
+	}
+}
+
+// Check if a string is in a slice of strings
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

@@ -50,20 +50,23 @@ var runServerCmd = &cobra.Command{
 		authApi.HandleFunc("/introspect", middleware.WithLogger(
 			auth.IntrospectAuthHandler(kcClient))).Methods(http.MethodPost)
 
-		// The CRUD routes all use the same middleware
-		var mw = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.WithLogger(middleware.ConvertMeToUser(
-				middleware.JWTMiddleware(next), "user-id"))
+		// Token routes
+		var workspaceMW = func(next http.HandlerFunc) http.HandlerFunc {
+			return middleware.ConvertMeToUser(
+				middleware.WorkspaceAuthMiddleware(
+					middleware.JWTMiddleware(
+						middleware.WithLogger(next),
+					)), "user-id")
 		}
 		workspacesAPI := api.PathPrefix("/workspaces/{workspace}/{user-id}").Subrouter()
-		workspacesAPI.HandleFunc("/tokens", mw(tokens.ListTokensHandler(tokenDB))).
-			Methods(http.MethodGet)
-		workspacesAPI.HandleFunc("/tokens", mw(tokens.CreateTokenHandler(tokenDB,
-			kcClient))).Methods(http.MethodPost)
-		workspacesAPI.HandleFunc("/tokens/{token-id}", mw(tokens.GetTokenHandler(
-			tokenDB))).Methods(http.MethodGet)
-		workspacesAPI.HandleFunc("/tokens/{token-id}", mw(tokens.DeleteTokenHandler(
-			tokenDB, kcClient))).Methods(http.MethodDelete)
+		workspacesAPI.HandleFunc("/tokens", workspaceMW(
+			tokens.ListTokensHandler(tokenDB))).Methods(http.MethodGet)
+		workspacesAPI.HandleFunc("/tokens", workspaceMW(
+			tokens.CreateTokenHandler(tokenDB, kcClient))).Methods(http.MethodPost)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", workspaceMW(
+			tokens.GetTokenHandler(tokenDB))).Methods(http.MethodGet)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", workspaceMW(
+			tokens.DeleteTokenHandler(tokenDB, kcClient))).Methods(http.MethodDelete)
 
 		// Docs
 		docs.SwaggerInfo.Host = config.Host

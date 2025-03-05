@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -79,10 +78,53 @@ func TestConvertMeToUser_Me_ReplaceWithUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	r = mux.SetURLVars(r, map[string]string{"user-id": "me"})
-	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, Claims{
-		jwt.StandardClaims{Subject: "abcd-1234"}})
+	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
+		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		Workspaces:     []string{"my-workspace"}})
+	w := httptest.NewRecorder()
 
 	mw := ConvertMeToUser(next, "user-id")
-	w := httptest.NewRecorder()
 	mw.ServeHTTP(w, r.WithContext(ctx))
+}
+
+func TestWorkspaceAuth_WorkspaceAuthorized_PassThroughRequest(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	r, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = mux.SetURLVars(r, map[string]string{"workspace": "my-workspace"})
+	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
+		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		Workspaces:     []string{"my-workspace"}})
+	w := httptest.NewRecorder()
+
+	mw := WorkspaceAuthMiddleware(next)
+	mw.ServeHTTP(w, r.WithContext(ctx))
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestWorkspaceAuth_WorkspaceNotAuthorized_Forbidden(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	r, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = mux.SetURLVars(r, map[string]string{"workspace": "another-workspace"})
+	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
+		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		Workspaces:     []string{"my-workspace"}})
+	w := httptest.NewRecorder()
+
+	mw := WorkspaceAuthMiddleware(next)
+	mw.ServeHTTP(w, r.WithContext(ctx))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
