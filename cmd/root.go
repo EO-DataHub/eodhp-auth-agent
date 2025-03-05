@@ -94,8 +94,8 @@ func setUp() *db.TokenDB {
 
 type Config struct {
 	Host           string                        `yaml:"host"`
-	BasePath       string                        `yaml:"basePath"`
-	DocsPath       string                        `yaml:"docsPath"`
+	BasePath       string                        `yaml:"base_path"`
+	DocsPath       string                        `yaml:"docs_path"`
 	AuthStrategies []auth.AuthStrategyInputs     `yaml:"flows"`
 	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
 	Database       databaseConfig                `yaml:"database"`

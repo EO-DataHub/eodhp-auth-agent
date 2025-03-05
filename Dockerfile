@@ -3,13 +3,17 @@ ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /workspace
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY main.go .
-COPY cmd/ cmd/
 COPY api/ api/
+COPY cmd/ cmd/
 COPY internal/ internal/
+
+# Generate Swagger docs
+RUN swag init -g cmd/runserver.go
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
     -o app main.go
