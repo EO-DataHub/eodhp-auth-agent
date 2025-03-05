@@ -91,7 +91,7 @@ func (t *TokenDB) CloseDB() error {
 }
 
 func (t TokenDB) Ping() error {
-	t.log.Info().Msg("pinging database")
+	t.log.Trace().Msg("pinging database")
 	return t.db.Ping()
 }
 
