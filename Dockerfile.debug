@@ -12,7 +12,6 @@ COPY api/ api/
 COPY cmd/ cmd/
 COPY docs/ docs/
 COPY internal/ internal/
-COPY migrations/ migrations/
 
 RUN go build -gcflags "all=-N -l" -o main .
 

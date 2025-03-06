@@ -11,7 +11,6 @@ COPY api/ api/
 COPY cmd/ cmd/
 COPY docs/ docs/
 COPY internal/ internal/
-COPY migrations/ migrations/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
     -o app main.go

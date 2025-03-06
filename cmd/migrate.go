@@ -37,8 +37,8 @@ var migrateCmd = &cobra.Command{
 		defer tokenDB.CloseDB()
 
 		// Run the migrations
-		log.Info().Msgf("Running migrations from directory '%s'", migrationsDir)
-		if err := tokenDB.Migrate(migrationsDir); err != nil {
+		log.Info().Msgf("Running migrations...")
+		if err := tokenDB.Migrate(); err != nil {
 			log.Fatal().Err(err).Msg("Failed to run migrations")
 		}
 

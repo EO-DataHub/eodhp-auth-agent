@@ -4,17 +4,20 @@ import (
 	"bytes"
 	"crypto/rand"
 	"database/sql"
+	"embed"
 	"encoding/hex"
 	"errors"
 	"time"
 
-	_ "github.com/EO-DataHub/eodhp-auth-agent/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 type Token struct {
 	ID           string
@@ -101,22 +104,24 @@ func (t TokenDB) Ping() error {
 	return t.db.Ping()
 }
 
-func (t TokenDB) Migrate(dir string) error {
+func (t TokenDB) Migrate() error {
 	t.log.Info().Msg("migrating database")
 	if t.driver == "" {
 		t.log.Error().Msg("database driver not set, have you opened the database?")
 		return errors.New("db: database driver not set")
 	}
 
+	goose.SetBaseFS(embedMigrations)
+
 	if err := goose.SetDialect(t.driver); err != nil {
 		t.log.Error().Err(err).Msg("failed to set database dialect")
 		return err
 	}
 
-	if err := goose.Up(t.db, dir); err != nil {
+	if err := goose.Up(t.db, "migrations"); err != nil {
 		t.log.Error().Err(err).Msg("failed to migrate database")
 		return err
-	}
+	} // "migrations embedded" in embed.FS at build time
 
 	t.log.Info().Msg("database migrated")
 	return nil

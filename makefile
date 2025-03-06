@@ -23,7 +23,7 @@ run:
 
 .PHONY: migrate
 migrate:
-	$(go) run main.go migrate --dir $(path) --config=$(config)
+	$(go) run main.go migrate --config=$(config)
 
 .PHONY: test
 test:
