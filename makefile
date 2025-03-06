@@ -24,3 +24,6 @@ container-push:
 .PHONY: docs
 docs:
 	swag init -g cmd/runserver.go
+
+.PHONY: deploy
+deploy: docs container-build container-push

@@ -1,5 +1,8 @@
 # This file is used to test config loading in cmd/main_test.go. Any updates
 # to this file should be reflected in the test file.
+host: example.com
+base_path: /
+docs_path: /docs
 flows:
   # if either authentication_url or authorization_url is not provided for a
   # flow, they will be assumed to be always allowed

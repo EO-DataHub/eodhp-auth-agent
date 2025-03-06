@@ -47,7 +47,8 @@ var runServerCmd = &cobra.Command{
 		api := r.PathPrefix(config.BasePath).Subrouter()
 
 		// The auth routes do not use the JWT middleware
-		authApi := api.PathPrefix("/auth").Subrouter()
+		// Auth routes are not intended as a public API, so are not on base path
+		authApi := r.PathPrefix("/auth").Subrouter()
 		authApi.HandleFunc("/", middleware.WithLogger(auth.AuthHandler(flows))).
 			Methods(http.MethodGet)
 		authApi.HandleFunc("/introspect", middleware.WithLogger(
