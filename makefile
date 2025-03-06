@@ -2,7 +2,7 @@
 go ?= go
 docker ?= docker
 image ?= public.ecr.aws/eodh/eodhp-auth-agent
-version ?= 0.5.0-rc1
+version ?= 0.5.0
 path ?= migrations
 port ?= 8080
 loglevel ?= info
