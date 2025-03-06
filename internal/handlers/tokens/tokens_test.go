@@ -44,7 +44,7 @@ func setupTokenDB() *db.TokenDB {
 	if err != nil {
 		panic(err)
 	}
-	err = d.InitDB()
+	err = d.Migrate("../../../migrations")
 	if err != nil {
 		panic(err)
 	}

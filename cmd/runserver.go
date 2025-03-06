@@ -5,12 +5,12 @@ import (
 	"net/http"
 	"path"
 
+	docs "github.com/EO-DataHub/eodhp-auth-agent/docs"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/health"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/tokens"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
-	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -86,7 +86,7 @@ var runServerCmd = &cobra.Command{
 		r.HandleFunc("/health", health.GetHealth(tokenDB)).Methods(http.MethodGet)
 
 		// Start the server
-		fmt.Printf("starting server on %s:%d\n", host, port)
+		fmt.Printf("serving on %s:%d\n", host, port)
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
 			r); err != nil {
 			log.Error().Err(err).Msg("could not start server")
