@@ -11,11 +11,7 @@ func init() {
 		"sets the log level")
 	migrateCmd.PersistentFlags().StringVar(&configPath, "config", "",
 		"path to config file (required)")
-	migrateCmd.PersistentFlags().StringVar(&migrationsDir, "dir", "migrations",
-		"path to migrations directory (optional)")
 }
-
-var migrationsDir string
 
 var migrateCmd = &cobra.Command{
 	Use:   "migrate [dir]",
