@@ -8,8 +8,10 @@ import (
 	"errors"
 	"time"
 
+	_ "github.com/EO-DataHub/eodhp-auth-agent/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -41,6 +43,7 @@ type TokenDB struct {
 	crypto      *crypto
 	prefixBytes []byte
 	log         *zerolog.Logger
+	driver      string
 }
 
 type TokenDBInputs struct {
@@ -68,7 +71,7 @@ func NewTokenDB(inputs TokenDBInputs) *TokenDB {
 }
 
 func (t *TokenDB) OpenDB(driver, dataSourceName string) error {
-	t.log.Info().Msg("opening database connection")
+	t.log.Debug().Msg("opening database connection")
 
 	var err error
 	t.db, err = sql.Open(driver, dataSourceName)
@@ -76,17 +79,20 @@ func (t *TokenDB) OpenDB(driver, dataSourceName string) error {
 		t.log.Error().Err(err).Msg("failed to open database connection")
 		return err
 	}
-
+	t.driver = driver
+	t.log.Info().Msg("database connection opened")
 	return nil
 }
 
 func (t *TokenDB) CloseDB() error {
+	t.log.Debug().Msg("closing database connection")
 	if err := t.db.Close(); err != nil {
 		return err
 	}
 	t.log.Info().Msg("database connection closed")
 	t.db = nil
 	t.log = nil
+	t.driver = ""
 	return nil
 }
 
@@ -95,44 +101,24 @@ func (t TokenDB) Ping() error {
 	return t.db.Ping()
 }
 
-func (t TokenDB) InitDB() error {
-	t.log.Info().Msg("initialising database")
-	var err error
+func (t TokenDB) Migrate(dir string) error {
+	t.log.Info().Msg("migrating database")
+	if t.driver == "" {
+		t.log.Error().Msg("database driver not set, have you opened the database?")
+		return errors.New("db: database driver not set")
+	}
 
-	// Create the token table if it does not exist
-	t.log.Debug().Msg("creating token table")
-	_, err = t.db.Exec(
-		`CREATE TABLE IF NOT EXISTS tokens (
-			id UUID PRIMARY KEY,
-			name TEXT NOT NULL,
-			token TEXT NOT NULL UNIQUE,
-			workspace TEXT NOT NULL,
-			user_id UUID NOT NULL,
-			access TEXT NOT NULL,
-			access_expiry INT NOT NULL,
-			refresh TEXT NOT NULL,
-			expires INT NOT NULL,
-			scope TEXT NOT NULL,
-			created INT NOT NULL
-		)`)
-	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create token table")
+	if err := goose.SetDialect(t.driver); err != nil {
+		t.log.Error().Err(err).Msg("failed to set database dialect")
 		return err
 	}
 
-	// Create token database indices
-	t.log.Trace().Msg("creating token database indices")
-	_, err = t.db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_token ON tokens(token);
-		CREATE INDEX IF NOT EXISTS idx_user ON tokens(workspace);
-		CREATE INDEX IF NOT EXISTS idx_user ON tokens(user_id);
-	`)
-	if err != nil {
-		t.log.Error().Err(err).Msg("failed to create token database indices")
+	if err := goose.Up(t.db, dir); err != nil {
+		t.log.Error().Err(err).Msg("failed to migrate database")
 		return err
 	}
 
-	t.log.Info().Msg("database initialised")
+	t.log.Info().Msg("database migrated")
 	return nil
 }
 

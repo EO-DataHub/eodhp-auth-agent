@@ -12,6 +12,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	// Add the token command to the root command
+	rootCmd.AddCommand(tokenCmd)
+
+	// Add subcommands to the main token command
+	tokenCmd.AddCommand(createTokenCmd)
+	tokenCmd.AddCommand(infoTokenCmd)
+	tokenCmd.AddCommand(refreshTokenCmd)
+	tokenCmd.AddCommand(listTokenCmd)
+	tokenCmd.AddCommand(deleteTokenCmd)
+
+	// Add flags to the info subcommand
+	infoTokenCmd.Flags().Bool("access", false, "show access token")
+	infoTokenCmd.Flags().Bool("refresh", false, "show refresh token")
+
+	// Add flags to the refresh subcommand
+	refreshTokenCmd.Flags().Bool("access", false, "show access token")
+}
+
 var tokenCmd = &cobra.Command{
 	Use:   "token",
 	Short: "Manage tokens",
@@ -200,23 +219,4 @@ var deleteTokenCmd = &cobra.Command{
 		}
 
 	},
-}
-
-func init() {
-	// Add the token command to the root command
-	rootCmd.AddCommand(tokenCmd)
-
-	// Add subcommands to the main token command
-	tokenCmd.AddCommand(createTokenCmd)
-	tokenCmd.AddCommand(infoTokenCmd)
-	tokenCmd.AddCommand(refreshTokenCmd)
-	tokenCmd.AddCommand(listTokenCmd)
-	tokenCmd.AddCommand(deleteTokenCmd)
-
-	// Add flags to the info subcommand
-	infoTokenCmd.Flags().Bool("access", false, "show access token")
-	infoTokenCmd.Flags().Bool("refresh", false, "show refresh token")
-
-	// Add flags to the refresh subcommand
-	refreshTokenCmd.Flags().Bool("access", false, "show access token")
 }
