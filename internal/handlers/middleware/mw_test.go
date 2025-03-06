@@ -83,7 +83,7 @@ func TestConvertMeToUser_Me_ReplaceWithUser(t *testing.T) {
 		Workspaces:     []string{"my-workspace"}})
 	w := httptest.NewRecorder()
 
-	mw := ConvertMeToUser(next, "user-id")
+	mw := ConvertMeToUser("user-id")(next)
 	mw.ServeHTTP(w, r.WithContext(ctx))
 }
 

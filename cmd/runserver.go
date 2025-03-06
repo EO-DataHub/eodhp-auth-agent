@@ -49,28 +49,26 @@ var runServerCmd = &cobra.Command{
 		// The auth routes do not use the JWT middleware
 		// Auth routes are not intended as a public API, so are not on base path
 		authApi := r.PathPrefix("/auth").Subrouter()
-		authApi.HandleFunc("/", middleware.WithLogger(auth.AuthHandler(flows))).
+		authApi.Use(middleware.WithLogger)
+		authApi.HandleFunc("", auth.AuthHandler(flows)).
 			Methods(http.MethodGet)
-		authApi.HandleFunc("/introspect", middleware.WithLogger(
-			auth.IntrospectAuthHandler(kcClient))).Methods(http.MethodPost)
+		authApi.HandleFunc("/introspect", auth.IntrospectAuthHandler(kcClient)).
+			Methods(http.MethodPost)
 
 		// Token routes
-		var workspaceMW = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.ConvertMeToUser(
-				middleware.WorkspaceAuthMiddleware(
-					middleware.JWTMiddleware(
-						middleware.WithLogger(next),
-					)), "user-id")
-		}
 		workspacesAPI := api.PathPrefix("/workspaces/{workspace}/{user-id}").Subrouter()
-		workspacesAPI.HandleFunc("/tokens", workspaceMW(
-			tokens.ListTokensHandler(tokenDB))).Methods(http.MethodGet)
-		workspacesAPI.HandleFunc("/tokens", workspaceMW(
-			tokens.CreateTokenHandler(tokenDB, kcClient))).Methods(http.MethodPost)
-		workspacesAPI.HandleFunc("/tokens/{token-id}", workspaceMW(
-			tokens.GetTokenHandler(tokenDB))).Methods(http.MethodGet)
-		workspacesAPI.HandleFunc("/tokens/{token-id}", workspaceMW(
-			tokens.DeleteTokenHandler(tokenDB, kcClient))).Methods(http.MethodDelete)
+		workspacesAPI.Use(middleware.WithLogger)
+		workspacesAPI.Use(middleware.JWTMiddleware)
+		workspacesAPI.Use(middleware.WorkspaceAuthMiddleware)
+		workspacesAPI.Use(middleware.ConvertMeToUser("user-id"))
+		workspacesAPI.HandleFunc("/tokens", tokens.ListTokensHandler(tokenDB)).
+			Methods(http.MethodGet)
+		workspacesAPI.HandleFunc("/tokens", tokens.CreateTokenHandler(tokenDB,
+			kcClient)).Methods(http.MethodPost)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", tokens.GetTokenHandler(
+			tokenDB)).Methods(http.MethodGet)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", tokens.DeleteTokenHandler(
+			tokenDB, kcClient)).Methods(http.MethodDelete)
 
 		// Docs
 		docs.SwaggerInfo.Host = config.Host
