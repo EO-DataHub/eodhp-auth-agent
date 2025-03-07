@@ -12,6 +12,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func init() {
+	// Add the token command to the root command
+	rootCmd.AddCommand(tokenCmd)
+
+	// Add subcommands to the main token command
+	tokenCmd.AddCommand(createTokenCmd)
+	tokenCmd.AddCommand(infoTokenCmd)
+	tokenCmd.AddCommand(refreshTokenCmd)
+	tokenCmd.AddCommand(listTokenCmd)
+	tokenCmd.AddCommand(deleteTokenCmd)
+
+	// Add flags to the info subcommand
+	infoTokenCmd.Flags().Bool("access", false, "show access token")
+	infoTokenCmd.Flags().Bool("refresh", false, "show refresh token")
+
+	// Add flags to the refresh subcommand
+	refreshTokenCmd.Flags().Bool("access", false, "show access token")
+}
+
 var tokenCmd = &cobra.Command{
 	Use:   "token",
 	Short: "Manage tokens",
@@ -159,18 +178,19 @@ var refreshTokenCmd = &cobra.Command{
 }
 
 var listTokenCmd = &cobra.Command{
-	Use:   "list [user_id]",
+	Use:   "list [workspace] [user_id]",
 	Short: "List all tokens",
-	Long:  `List all tokens for a user.`,
+	Long:  `List all tokens for a user in a workspace.`,
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		userID := args[0]
+		workspace := args[0]
+		userID := args[1]
 		fmt.Printf("Listing tokens for user ID %s\n", userID)
 
 		tokenDB := setUp()
 		defer tokenDB.CloseDB()
 
-		tokens, err := tokenDB.ListUserTokens(userID)
+		tokens, err := tokenDB.ListUserTokens(workspace, userID)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to get tokens by user ID")
 		}
@@ -183,40 +203,20 @@ var listTokenCmd = &cobra.Command{
 }
 
 var deleteTokenCmd = &cobra.Command{
-	Use:   "delete [user_id] [token_id]",
+	Use:   "delete [token_id]",
 	Short: "Delete a token",
 	Long:  `Delete a token.`,
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		userID := args[0]
-		tokenID := args[1]
-		fmt.Printf("Deleting token ID %s for user ID %s\n", tokenID, userID)
+		tokenID := args[0]
+		fmt.Printf("Deleting token ID %s\n", tokenID)
 		tokenDB := setUp()
 		defer tokenDB.CloseDB()
 
-		err := tokenDB.DeleteTokenByID(userID, tokenID)
+		err := tokenDB.DeleteTokenByID(tokenID)
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to delete token")
 		}
 
 	},
-}
-
-func init() {
-	// Add the token command to the root command
-	rootCmd.AddCommand(tokenCmd)
-
-	// Add subcommands to the main token command
-	tokenCmd.AddCommand(createTokenCmd)
-	tokenCmd.AddCommand(infoTokenCmd)
-	tokenCmd.AddCommand(refreshTokenCmd)
-	tokenCmd.AddCommand(listTokenCmd)
-	tokenCmd.AddCommand(deleteTokenCmd)
-
-	// Add flags to the info subcommand
-	infoTokenCmd.Flags().Bool("access", false, "show access token")
-	infoTokenCmd.Flags().Bool("refresh", false, "show refresh token")
-
-	// Add flags to the refresh subcommand
-	refreshTokenCmd.Flags().Bool("access", false, "show access token")
 }

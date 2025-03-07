@@ -29,7 +29,7 @@ func setup() *TokenDB {
 	if err != nil {
 		panic(err)
 	}
-	err = c.InitDB()
+	err = c.Migrate()
 	if err != nil {
 		panic(err)
 	}

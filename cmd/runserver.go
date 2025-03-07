@@ -3,16 +3,23 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"path"
 
+	docs "github.com/EO-DataHub/eodhp-auth-agent/docs"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/auth"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/health"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/tokens"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// @title EODHP Auth Agent API
+// @version v1
+// @description This is the API for the UK EO DataHub Auth Agent.
 var runServerCmd = &cobra.Command{
 	Use:   "runserver",
 	Short: "Run the server",
@@ -35,33 +42,51 @@ var runServerCmd = &cobra.Command{
 			}
 		}
 
-		// Create routes
+		// Create routes under base path
 		r := mux.NewRouter()
+		api := r.PathPrefix(config.BasePath).Subrouter()
 
 		// The auth routes do not use the JWT middleware
-		r.HandleFunc("/auth", middleware.WithLogger(auth.AuthHandler(flows))).
+		// Auth routes are not intended as a public API, so are not on base path
+		authApi := r.PathPrefix("/auth").Subrouter()
+		authApi.Use(middleware.WithLogger)
+		authApi.HandleFunc("", auth.AuthHandler(flows)).
 			Methods(http.MethodGet)
-		r.HandleFunc("/auth/introspect", middleware.WithLogger(
-			auth.IntrospectAuthHandler(kcClient))).Methods(http.MethodPost)
+		authApi.HandleFunc("/introspect", auth.IntrospectAuthHandler(kcClient)).
+			Methods(http.MethodPost)
 
-		// The CRUD routes all use the same middleware
-		var middleware = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.WithLogger(middleware.JWTMiddleware(next))
-		}
-		r.HandleFunc("/tokens", middleware(tokens.ListTokensHandler(tokenDB))).
+		// Token routes
+		workspacesAPI := api.PathPrefix("/workspaces/{workspace}/{user-id}").Subrouter()
+		workspacesAPI.Use(middleware.WithLogger)
+		workspacesAPI.Use(middleware.JWTMiddleware)
+		workspacesAPI.Use(middleware.WorkspaceAuthMiddleware)
+		workspacesAPI.Use(middleware.ConvertMeToUser("user-id"))
+		workspacesAPI.HandleFunc("/tokens", tokens.ListTokensHandler(tokenDB)).
 			Methods(http.MethodGet)
-		r.HandleFunc("/tokens", middleware(tokens.CreateTokenHandler(tokenDB,
-			kcClient))).Methods(http.MethodPost)
-		r.HandleFunc("/tokens/{token_id}", middleware(tokens.GetTokenHandler(
-			tokenDB))).Methods(http.MethodGet)
-		r.HandleFunc("/tokens/{token_id}", middleware(tokens.DeleteTokenHandler(
-			tokenDB, kcClient))).Methods(http.MethodDelete)
+		workspacesAPI.HandleFunc("/tokens", tokens.CreateTokenHandler(tokenDB,
+			kcClient)).Methods(http.MethodPost)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", tokens.GetTokenHandler(
+			tokenDB)).Methods(http.MethodGet)
+		workspacesAPI.HandleFunc("/tokens/{token-id}", tokens.DeleteTokenHandler(
+			tokenDB, kcClient)).Methods(http.MethodDelete)
+
+		// Docs
+		docs.SwaggerInfo.Host = config.Host
+		docs.SwaggerInfo.BasePath = config.BasePath
+		r.PathPrefix(config.DocsPath).Handler(httpSwagger.Handler(
+			httpSwagger.URL(path.Join(config.DocsPath, "/doc.json")),
+			httpSwagger.DeepLinking(true),
+			httpSwagger.DocExpansion("none"),
+			httpSwagger.DomID("swagger-ui"),
+		)).Methods(http.MethodGet)
+
+		// Health check
+		r.HandleFunc("/health", health.GetHealth(tokenDB)).Methods(http.MethodGet)
 
 		// Start the server
-		fmt.Printf("starting server on %s:%d\n", host, port)
+		fmt.Printf("serving on %s:%d\n", host, port)
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
 			r); err != nil {
-
 			log.Error().Err(err).Msg("could not start server")
 		}
 	},

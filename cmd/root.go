@@ -70,8 +70,10 @@ func setUp() *db.TokenDB {
 	fmt.Printf("client id: %s\n", config.Keycloak.ClientID)
 	fmt.Printf("database driver: %s\n", config.Database.Driver)
 	fmt.Printf("api prefix: %s\n", config.APIToken.Prefix)
-	fmt.Printf("access token expiry margin: %d\n\n",
+	fmt.Printf("access token expiry margin: %d\n",
 		config.APIToken.AccessTokenExpiryMargin)
+	fmt.Printf("api available at: %s%s\n", config.Host, config.BasePath)
+	fmt.Printf("docs available at: %s%s\n\n", config.Host, config.DocsPath)
 
 	// Create the database client
 	tokenDB := db.NewTokenDB(config.APIToken)
@@ -91,6 +93,9 @@ func setUp() *db.TokenDB {
 }
 
 type Config struct {
+	Host           string                        `yaml:"host"`
+	BasePath       string                        `yaml:"base_path"`
+	DocsPath       string                        `yaml:"docs_path"`
 	AuthStrategies []auth.AuthStrategyInputs     `yaml:"flows"`
 	Keycloak       keycloak.KeycloakClientInputs `yaml:"keycloak"`
 	Database       databaseConfig                `yaml:"database"`
