@@ -2,15 +2,13 @@
 go ?= go
 docker ?= docker
 image ?= public.ecr.aws/eodh/eodhp-auth-agent
-version ?= 0.5.0
+version ?= 0.5.0-debug1
 path ?= migrations
 port ?= 8080
 loglevel ?= info
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
-
-
 
 .PHONY: build
 build:

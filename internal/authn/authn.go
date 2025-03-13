@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -141,6 +142,8 @@ func (a Authenticator) hasAPIToken(req *http.Request) (bool, string) {
 // access token has expired, it is refreshed using the refresh token and the
 // database is updated with the new access and refresh token.
 func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+
 	// Get token from DB
 	token, err := a.tokenDB.GetTokenByAPIToken(apiToken)
 	if err != nil {
@@ -155,9 +158,26 @@ func (a *Authenticator) exchangeAPIToken(apiToken string) (string, error) {
 	// Check token access expiry
 	if a.tokenDB.AccessTokenRequiresRefresh(*token) {
 		// Access token has, or will soon, expire. Refresh it.
+
+		// Test claims before and after refresh
+		claims1 := Claims{}
+		if err := ParseClaims(token.Access, claims1); err != nil {
+			return "", fmt.Errorf("failed to parse claims before refresh: %w", err)
+		}
 		tokenResponse, err := a.auth.RefreshToken(token.Refresh)
 		if err != nil {
 			return "", fmt.Errorf("failed to refresh token: %w", err)
+		}
+
+		claims2 := Claims{}
+		if err := ParseClaims(token.Access, claims2); err != nil {
+			return "", fmt.Errorf("failed to parse claims after refresh: %w", err)
+		}
+
+		if claims1["scope"] != claims2["scope"] {
+			logger.Warn().Interface("claims1", claims1).
+				Interface("claims2", claims2).
+				Msg("scope mismatch after token refresh")
 		}
 
 		// Update DB with new access token
