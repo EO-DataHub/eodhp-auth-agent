@@ -83,6 +83,7 @@ func (a Authenticator) IsAuthenticated(w http.ResponseWriter,
 		logger.Error().Err(err).Msg("failed to send auth request")
 		return false, Claims{}, err
 	}
+	defer resp.Body.Close()
 
 	// Check the response status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
