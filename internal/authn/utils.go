@@ -2,50 +2,59 @@ package authn
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var ErrInvalidJWT = errors.New("invalid jwt token")
 var ErrInvalidClaims = errors.New("invalid claims")
+var parser = jwt.NewParser()
 
 // Need to preserve unknown claims through marshalling so implementing jwt.Claims
 // interface on map[string]any
 type Claims map[string]any
 
-func (c Claims) Valid() error {
-	vErr := new(jwt.ValidationError)
-	now := float64(time.Now().Unix())
-
+func (c Claims) GetExpirationTime() (*jwt.NumericDate, error) {
 	if exp, ok := c["exp"].(float64); ok {
-		if !verifyExp(exp, now, false) {
-			delta := time.Unix(int64(now), 0).Sub(time.Unix(int64(exp), 0))
-			vErr.Inner = fmt.Errorf("token is expired by %v", delta)
-			vErr.Errors |= jwt.ValidationErrorExpired
-		}
+		return jwt.NewNumericDate(time.Unix(int64(exp), 0)), nil
 	}
+	return nil, nil
+}
 
-	if iss, ok := c["iat"].(float64); ok {
-		if !verifyIat(iss, now, false) {
-			vErr.Inner = fmt.Errorf("token used before issued")
-			vErr.Errors |= jwt.ValidationErrorIssuedAt
-		}
+func (c Claims) GetIssuedAt() (*jwt.NumericDate, error) {
+	if iat, ok := c["iat"].(float64); ok {
+		return jwt.NewNumericDate(time.Unix(int64(iat), 0)), nil
 	}
+	return nil, nil
+}
 
+func (c Claims) GetNotBefore() (*jwt.NumericDate, error) {
 	if nbf, ok := c["nbf"].(float64); ok {
-		if !verifyNbf(nbf, now, false) {
-			vErr.Inner = fmt.Errorf("token is not valid yet")
-			vErr.Errors |= jwt.ValidationErrorNotValidYet
-		}
+		return jwt.NewNumericDate(time.Unix(int64(nbf), 0)), nil
 	}
+	return nil, nil
+}
 
-	if vErr.Errors == 0 {
-		return nil
+func (c Claims) GetIssuer() (string, error) {
+	if iss, ok := c["iss"].(string); ok {
+		return iss, nil
 	}
+	return "", nil
+}
 
-	return vErr
+func (c Claims) GetSubject() (string, error) {
+	if sub, ok := c["sub"].(string); ok {
+		return sub, nil
+	}
+	return "", nil
+}
+
+func (c Claims) GetAudience() (jwt.ClaimStrings, error) {
+	if aud, ok := c["aud"].([]string); ok {
+		return jwt.ClaimStrings(aud), nil
+	}
+	return nil, nil
 }
 
 func CreateJWTToken(claims jwt.Claims, secret string) (string, error) {
@@ -60,40 +69,8 @@ func CreateJWTToken(claims jwt.Claims, secret string) (string, error) {
 
 func ParseClaims(token string, claims jwt.Claims) error {
 	// Check if token is JWT by attempting to parse it
-	if t, err := jwt.ParseWithClaims(token, claims, nil); err != nil {
-		// Ignore validation errors (no need to check signing of key)
-		if _, ok := err.(*jwt.ValidationError); !ok {
-			return ErrInvalidJWT
-		}
-
-		// Check if token was decoded successfully
-		if t == nil {
-			// Return an error if the token was not decoded successfully
-			return ErrInvalidClaims
-		}
+	if _, _, err := parser.ParseUnverified(token, claims); err != nil {
+		return err
 	}
 	return nil
-}
-
-// ----- helpers
-
-func verifyExp(exp, now float64, required bool) bool {
-	if exp == 0 {
-		return !required
-	}
-	return now <= exp
-}
-
-func verifyIat(iat, now float64, required bool) bool {
-	if iat == 0 {
-		return !required
-	}
-	return now >= iat
-}
-
-func verifyNbf(nbf, now float64, required bool) bool {
-	if nbf == 0 {
-		return !required
-	}
-	return now >= nbf
 }

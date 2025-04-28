@@ -30,3 +30,10 @@ func TestParseClaims_Valid(t *testing.T) {
 	assert.Equal(t, float64(1724745600), claims["iat"].(float64))
 	assert.Equal(t, "test", claims["username"])
 }
+
+func TestParseClaims_Invalid_Error(t *testing.T) {
+	token := "invalid.token.sig"
+	claims := Claims{}
+	err := ParseClaims(token, &claims)
+	assert.Error(t, err)
+}

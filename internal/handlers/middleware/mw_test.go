@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 )
@@ -26,7 +26,7 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 		t.Fatal(err)
 	}
 	jwtToken, err := authn.CreateJWTToken(Claims{
-		StandardClaims: jwt.StandardClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: "abcd-1234",
 		},
 	}, "secret")
@@ -79,7 +79,7 @@ func TestConvertMeToUser_Me_ReplaceWithUser(t *testing.T) {
 	}
 	r = mux.SetURLVars(r, map[string]string{"user-id": "me"})
 	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
-		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "abcd-1234"},
 		Workspaces:     []string{"my-workspace"}})
 	w := httptest.NewRecorder()
 
@@ -98,7 +98,7 @@ func TestWorkspaceAuth_WorkspaceAuthorized_PassThroughRequest(t *testing.T) {
 	}
 	r = mux.SetURLVars(r, map[string]string{"workspace": "my-workspace"})
 	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
-		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "abcd-1234"},
 		Workspaces:     []string{"my-workspace"}})
 	w := httptest.NewRecorder()
 
@@ -119,7 +119,7 @@ func TestWorkspaceAuth_WorkspaceNotAuthorized_Forbidden(t *testing.T) {
 	}
 	r = mux.SetURLVars(r, map[string]string{"workspace": "another-workspace"})
 	ctx := context.WithValue(r.Context(), ClaimsKey, Claims{
-		StandardClaims: jwt.StandardClaims{Subject: "abcd-1234"},
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "abcd-1234"},
 		Workspaces:     []string{"my-workspace"}})
 	w := httptest.NewRecorder()
 
