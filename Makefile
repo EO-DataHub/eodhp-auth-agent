@@ -2,14 +2,12 @@
 go ?= go
 docker ?= docker
 image ?= public.ecr.aws/eodh/eodhp-auth-agent
-version ?= 0.5.1
+version ?= 0.5.2
 port ?= 8080
 loglevel ?= info
 
 .SILENT:
 MAKEFLAGS += --no-print-directory
-
-
 
 .PHONY: build
 build:
@@ -49,5 +47,5 @@ container-run:
 		--config=/etc/auth-agent/config.yaml 
 		
 
-.PHONY: deploy
-deploy: docs container-build container-push
+.PHONY: publish
+publish: docs container-build container-push

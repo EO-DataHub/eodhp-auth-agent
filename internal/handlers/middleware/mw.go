@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -16,7 +16,7 @@ import (
 type contextKey string
 type tokenKey string
 type Claims struct {
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 	Workspaces []string `json:"workspaces"`
 }
 

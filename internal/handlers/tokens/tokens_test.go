@@ -15,7 +15,7 @@ import (
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/db"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/keycloak"
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
@@ -150,7 +150,7 @@ func TestCreateTokenHandler_MinimalRequest_Success(t *testing.T) {
 	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
 		"user-id": userID})
 	claims := middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: userID,
 		},
 	}
@@ -220,7 +220,7 @@ func TestCreateTokenHandler_FullRequest_Success(t *testing.T) {
 	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
 		"user-id": userID})
 	claims := middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: userID,
 		},
 	}
@@ -287,7 +287,7 @@ func TestCreateTokenHandler_InvalidToken_Unauthorized(t *testing.T) {
 	assert.NoError(t, err)
 	r := httptest.NewRequest("POST", "/tokens", bytes.NewBuffer(body))
 	claims := middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: userID,
 		},
 	}
@@ -326,7 +326,7 @@ func TestCreateTokenHandler_InvalidRequest_BadRequest(t *testing.T) {
 	r = mux.SetURLVars(r, map[string]string{"workspace": workspace,
 		"user-id": userID})
 	claims := middleware.Claims{
-		StandardClaims: jwt.StandardClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
 			Subject: userID,
 		},
 	}
