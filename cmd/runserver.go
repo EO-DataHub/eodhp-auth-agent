@@ -81,7 +81,7 @@ var runServerCmd = &cobra.Command{
 		)).Methods(http.MethodGet)
 
 		// Health check
-		r.HandleFunc("/health", health.GetHealth(tokenDB)).Methods(http.MethodGet)
+		r.HandleFunc("/healthz", health.GetHealth(tokenDB)).Methods(http.MethodGet)
 
 		// Start the server
 		fmt.Printf("serving on %s:%d\n", host, port)
