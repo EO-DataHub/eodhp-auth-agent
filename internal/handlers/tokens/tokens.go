@@ -166,7 +166,7 @@ func CreateTokenHandler(tokenDB *db.TokenDB, auth *keycloak.KeycloakClient,
 
 		// Get the offline token from the Keycloak client
 		scope := fmt.Sprintf("offline_access workspace:%s", workspace)
-		resp, err := auth.ExchangeToken(authToken, scope)
+		resp, err := auth.ExchangeToken(authToken, scope, true)
 		if err != nil {
 			var errStatus int
 			if err, ok := err.(*keycloak.HTTPError); ok {
