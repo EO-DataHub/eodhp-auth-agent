@@ -90,7 +90,7 @@ func (k KeycloakClient) RefreshToken(refreshToken string) (*TokenResponse,
 	return &tokenResponse, nil
 }
 
-func (k KeycloakClient) ExchangeToken(accessToken, scope string) (*TokenResponse,
+func (k KeycloakClient) ExchangeToken(accessToken, scope string, eodhIsApiKey ...bool) (*TokenResponse,
 	error) {
 
 	data := url.Values{}
@@ -99,6 +99,9 @@ func (k KeycloakClient) ExchangeToken(accessToken, scope string) (*TokenResponse
 	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
 	data.Set("subject_token", accessToken)
 	data.Set("scope", scope)
+	if len(eodhIsApiKey) > 0 && eodhIsApiKey[0] {
+		data.Set("eodh_is_api_key", "true")
+	}
 
 	resp, err := k.http.PostForm(
 		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token",
