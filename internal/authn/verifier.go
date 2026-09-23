@@ -1,7 +1,6 @@
 package authn
 
 import (
-	"context"
 	"fmt"
 	"slices"
 
@@ -22,7 +21,6 @@ var allowedAudiences = []string{"eodh", "eodh-workspaces"}
 // reaches it directly from elsewhere on the cluster network.
 type Verifier struct {
 	keyFunc jwt.Keyfunc
-	ready   func(ctx context.Context) bool
 }
 
 // NewVerifier builds a Verifier backed by the JWKS at certsURL, e.g.
@@ -32,39 +30,24 @@ type Verifier struct {
 //
 // A failed first fetch (e.g. Keycloak unreachable at boot) does not surface as an error
 // here: the underlying keyfunc library swallows it and retries in the background, leaving
-// the Verifier holding no keys until a refresh succeeds. Callers that need to know about
-// that gap - e.g. to keep a pod out of a load balancer until it can actually verify tokens
-// - should use Ready.
+// the Verifier holding no keys (so the token API returns 401) until a refresh succeeds.
+// This is deliberately not wired into /healthz: the same pod serves nginx's auth_request
+// for every request on the platform, so failing health on a Keycloak blip would take the
+// whole platform down rather than just the token API.
 func NewVerifier(certsURL string) (*Verifier, error) {
 	kf, err := keyfunc.NewDefault([]string{certsURL})
 	if err != nil {
 		return nil, fmt.Errorf("building JWKS keyfunc for %q: %w", certsURL, err)
 	}
 
-	return &Verifier{
-		keyFunc: kf.Keyfunc,
-		ready: func(ctx context.Context) bool {
-			keys, err := kf.Storage().KeyReadAll(ctx)
-			return err == nil && len(keys) > 0
-		},
-	}, nil
+	return &Verifier{keyFunc: kf.Keyfunc}, nil
 }
 
 // NewVerifierWithKeyFunc builds a Verifier from an already-constructed jwt.Keyfunc,
 // letting tests (and anything else that already has one) supply a fixed key rather than
-// talking to a real JWKS endpoint. Ready always reports true for a Verifier built this way.
+// talking to a real JWKS endpoint.
 func NewVerifierWithKeyFunc(keyFunc jwt.Keyfunc) *Verifier {
 	return &Verifier{keyFunc: keyFunc}
-}
-
-// Ready reports whether the verifier has a signing key loaded, i.e. whether ParseClaims
-// can currently succeed for a genuinely valid token. It is false for the window after boot
-// where the JWKS fetch from Keycloak hasn't yet completed.
-func (v *Verifier) Ready(ctx context.Context) bool {
-	if v.ready == nil {
-		return true
-	}
-	return v.ready(ctx)
 }
 
 // ParseClaims verifies token's signature and audience against Keycloak, then populates
