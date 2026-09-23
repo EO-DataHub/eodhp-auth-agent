@@ -47,7 +47,7 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:  "abcd-1234",
-			Audience: jwt.ClaimStrings{"account"},
+			Audience: jwt.ClaimStrings{"eodh"},
 		},
 	}).SignedString(key)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestJWTMiddleware_ForgedSignature_Rejected(t *testing.T) {
 	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:  "abcd-1234",
-			Audience: jwt.ClaimStrings{"account"},
+			Audience: jwt.ClaimStrings{"eodh"},
 		},
 	}).SignedString(otherKey)
 	if err != nil {

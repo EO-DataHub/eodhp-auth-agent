@@ -9,10 +9,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// allowedAudiences matches the client IDs tokens on this platform are actually issued
-// under, per the reference implementation already used correctly elsewhere on the
-// platform (eodh-ac-api, wf-catalogue-service, accounting-service, eodhp-workspace-services).
-var allowedAudiences = []string{"oauth2-proxy-workspaces", "oauth2-proxy", "account"}
+// allowedAudiences are the Keycloak client IDs platform tokens are issued for (the audience
+// mappers on the eodh and eodh-workspaces clients, eodhp-argocd-deployment
+// apps/keycloak/base/realms.yaml). This list is duplicated across the platform's services,
+// so change them together.
+var allowedAudiences = []string{"eodh", "eodh-workspaces"}
 
 // Verifier checks a JWT's signature against Keycloak's published key before trusting any
 // claim in it. Use this, not the unverified ParseClaims, for any endpoint that accepts a
