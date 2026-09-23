@@ -6,6 +6,7 @@ import (
 	"path"
 
 	docs "github.com/EO-DataHub/eodhp-auth-agent/docs"
+	"github.com/EO-DataHub/eodhp-auth-agent/internal/authn"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/auth"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/health"
 	"github.com/EO-DataHub/eodhp-auth-agent/internal/handlers/middleware"
@@ -42,6 +43,15 @@ var runServerCmd = &cobra.Command{
 			}
 		}
 
+		// Verifies JWT signatures against Keycloak's own published key, rather than
+		// trusting claims that were never cryptographically checked
+		certsURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs",
+			config.Keycloak.KeycloakURL, config.Keycloak.Realm)
+		jwtVerifier, err := authn.NewVerifier(certsURL)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to initialize JWT verifier")
+		}
+
 		// Create routes under base path
 		r := mux.NewRouter()
 		api := r.PathPrefix(config.BasePath).Subrouter()
@@ -58,7 +68,7 @@ var runServerCmd = &cobra.Command{
 		// Token routes
 		workspacesAPI := api.PathPrefix("/workspaces/{workspace}/{user-id}").Subrouter()
 		workspacesAPI.Use(middleware.WithLogger)
-		workspacesAPI.Use(middleware.JWTMiddleware)
+		workspacesAPI.Use(middleware.JWTMiddleware(jwtVerifier))
 		workspacesAPI.Use(middleware.WorkspaceAuthMiddleware)
 		workspacesAPI.Use(middleware.ConvertMeToUser("user-id"))
 		workspacesAPI.HandleFunc("/tokens", tokens.ListTokensHandler(tokenDB)).
@@ -81,7 +91,8 @@ var runServerCmd = &cobra.Command{
 		)).Methods(http.MethodGet)
 
 		// Health check
-		r.HandleFunc("/healthz", health.GetHealth(tokenDB)).Methods(http.MethodGet)
+		r.HandleFunc("/healthz", health.GetHealth(tokenDB, jwtVerifier)).
+			Methods(http.MethodGet)
 
 		// Start the server
 		fmt.Printf("serving on %s:%d\n", host, port)

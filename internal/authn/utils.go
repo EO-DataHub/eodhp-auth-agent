@@ -50,11 +50,26 @@ func (c Claims) GetSubject() (string, error) {
 	return "", nil
 }
 
+// GetAudience returns the "aud" claim, which per RFC 7519 may be encoded as either a
+// single string or an array of strings; json.Unmarshal into map[string]any produces a
+// string or a []any respectively, so both are handled here.
 func (c Claims) GetAudience() (jwt.ClaimStrings, error) {
-	if aud, ok := c["aud"].([]string); ok {
+	switch aud := c["aud"].(type) {
+	case string:
+		return jwt.ClaimStrings{aud}, nil
+	case []string:
 		return jwt.ClaimStrings(aud), nil
+	case []any:
+		claims := make(jwt.ClaimStrings, 0, len(aud))
+		for _, a := range aud {
+			if s, ok := a.(string); ok {
+				claims = append(claims, s)
+			}
+		}
+		return claims, nil
+	default:
+		return nil, nil
 	}
-	return nil, nil
 }
 
 func CreateJWTToken(claims jwt.Claims, secret string) (string, error) {
@@ -67,6 +82,11 @@ func CreateJWTToken(claims jwt.Claims, secret string) (string, error) {
 	return signedToken, nil
 }
 
+// ParseClaims extracts claims without verifying the token's signature. Only safe for a
+// token that has already been authenticated elsewhere, e.g. one returned by a successful
+// call to the oauth2-proxy auth endpoint in IsAuthenticated. Anything that accepts a
+// bearer token directly from the client must use Verifier.ParseClaims instead, so its
+// signature is actually checked before any claim in it is trusted.
 func ParseClaims(token string, claims jwt.Claims) error {
 	// Check if token is JWT by attempting to parse it
 	if _, _, err := parser.ParseUnverified(token, claims); err != nil {

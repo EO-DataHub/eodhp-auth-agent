@@ -23,47 +23,50 @@ type Claims struct {
 const ClaimsKey contextKey = "claims"
 const TokenKey tokenKey = "token"
 
-func JWTMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			logger := zerolog.Ctx(r.Context()).With().
-				Str("handler", "jwt middleware").Logger()
+func JWTMiddleware(verifier *authn.Verifier) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				logger := zerolog.Ctx(r.Context()).With().
+					Str("handler", "jwt middleware").Logger()
 
-			// Get the Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				logger.Debug().Msg("authorization header missing")
-				http.Error(w, "authorization header missing",
-					http.StatusUnauthorized)
-				return
-			}
+				// Get the Authorization header
+				authHeader := r.Header.Get("Authorization")
+				if authHeader == "" {
+					logger.Debug().Msg("authorization header missing")
+					http.Error(w, "authorization header missing",
+						http.StatusUnauthorized)
+					return
+				}
 
-			// Check the Authorization header format
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token == authHeader {
-				logger.Error().Msg("invalid auth header format, should be bearer")
-				http.Error(w, "invalid auth header format, should be bearer",
-					http.StatusUnauthorized)
-				return
-			}
+				// Check the Authorization header format
+				token := strings.TrimPrefix(authHeader, "Bearer ")
+				if token == authHeader {
+					logger.Error().Msg("invalid auth header format, should be bearer")
+					http.Error(w, "invalid auth header format, should be bearer",
+						http.StatusUnauthorized)
+					return
+				}
 
-			// Parse the token for JWT claims
-			claims := Claims{}
-			err := authn.ParseClaims(token, &claims)
-			if err != nil {
-				logger.Error().Err(err).Msg("invalid bearer jwt token")
-				http.Error(w, "invalid bearer jwt token",
-					http.StatusUnauthorized)
-				return
-			}
-			logger.Debug().Str("userid", claims.Subject).Msg("token verified")
+				// Parse the token for JWT claims, verifying its signature against
+				// Keycloak's published key
+				claims := Claims{}
+				err := verifier.ParseClaims(token, &claims)
+				if err != nil {
+					logger.Error().Err(err).Msg("invalid bearer jwt token")
+					http.Error(w, "invalid bearer jwt token",
+						http.StatusUnauthorized)
+					return
+				}
+				logger.Debug().Str("userid", claims.Subject).Msg("token verified")
 
-			// Add the token and claims to the context
-			ctx := context.WithValue(r.Context(), TokenKey, token)
-			ctx = context.WithValue(ctx, ClaimsKey, claims)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		},
-	)
+				// Add the token and claims to the context
+				ctx := context.WithValue(r.Context(), TokenKey, token)
+				ctx = context.WithValue(ctx, ClaimsKey, claims)
+				next.ServeHTTP(w, r.WithContext(ctx))
+			},
+		)
+	}
 }
 
 // Middleware to add additional context to each request
