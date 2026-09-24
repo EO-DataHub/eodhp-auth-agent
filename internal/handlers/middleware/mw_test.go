@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +13,23 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// testVerifier is a Verifier backed by a throwaway RSA keypair, so tests can sign tokens
+// without talking to a real Keycloak JWKS endpoint.
+func testVerifier(t *testing.T) (*authn.Verifier, *rsa.PrivateKey) {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	verifier := authn.NewVerifierWithKeyFunc(func(*jwt.Token) (any, error) {
+		return &key.PublicKey, nil
+	})
+
+	return verifier, key
+}
 
 func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,19 +43,55 @@ func TestJWTMiddleware_ValidBearerToken_ClaimsPopulated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jwtToken, err := authn.CreateJWTToken(Claims{
+	verifier, key := testVerifier(t)
+	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject: "abcd-1234",
+			Subject:  "abcd-1234",
+			Audience: jwt.ClaimStrings{"eodh"},
 		},
-	}, "secret")
+	}).SignedString(key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
 
-	mw := JWTMiddleware(next)
+	mw := JWTMiddleware(verifier)(next)
 	w := httptest.NewRecorder()
 	mw.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestJWTMiddleware_ForgedSignature_Rejected(t *testing.T) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("next handler should not be called for a forged token")
+	})
+
+	req, err := http.NewRequest("GET", "/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, _ := testVerifier(t)
+	// Signed by a different key than the one the verifier checks against - the exact
+	// bug that shipped, where ParseUnverified accepted this without checking.
+	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	jwtToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:  "abcd-1234",
+			Audience: jwt.ClaimStrings{"eodh"},
+		},
+	}).SignedString(otherKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
+
+	mw := JWTMiddleware(verifier)(next)
+	w := httptest.NewRecorder()
+	mw.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated(t *testing.T) {
@@ -60,7 +114,8 @@ func TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated(t *testing.T) {
 	}
 	req.Header.Add("Authorization", "Bearer invalid-token")
 
-	mw := JWTMiddleware(next)
+	verifier, _ := testVerifier(t)
+	mw := JWTMiddleware(verifier)(next)
 	w := httptest.NewRecorder()
 	mw.ServeHTTP(w, req)
 }
