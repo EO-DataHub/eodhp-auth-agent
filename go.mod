@@ -2,6 +2,7 @@ module github.com/EO-DataHub/eodhp-auth-agent
 
 go 1.23.0
 
+toolchain go1.23.3
 
 require (
 	github.com/MicahParks/keyfunc/v3 v3.7.0
