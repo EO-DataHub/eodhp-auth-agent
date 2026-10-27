@@ -46,8 +46,8 @@ func AuthHandler(flows []AuthProcessor) http.HandlerFunc {
 		} else {
 			w.WriteHeader(http.StatusForbidden)
 		}
-		w.Write([]byte(fmt.Sprintf("Authenticated: %t, Authorized: %t",
-			isAuthenticated, isAuthorized)))
+		fmt.Fprintf(w, "Authenticated: %t, Authorized: %t",
+			isAuthenticated, isAuthorized)
 	}
 }
 
